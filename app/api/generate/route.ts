@@ -94,80 +94,18 @@ export async function POST(req: NextRequest) {
 - 내용이 자연스럽게 아래로 늘어나도록 min-height와 padding으로만 여백을 지정합니다
 
 ═══ 사용 가능한 CSS 컴포넌트 ═══
-아래 컴포넌트를 활용하면 예시 제안서처럼 전문적으로 보입니다:
+색상: 파랑=#3B82F6, 초록=#16A34A, 노랑=#D97706, 빨강=#DC2626, 배경=#F8F7F4, 카드배경=#fff, 테두리=#E8E6E0
 
-/* KPI 수치 카드 */
-<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-bottom:28px;">
-  <div style="background:#fff;border:1px solid #E8E6E0;border-radius:12px;padding:20px 22px;">
-    <div style="font-size:11px;font-weight:600;color:#9C9A94;margin-bottom:8px;">라벨</div>
-    <div style="font-size:28px;font-weight:800;color:#3B82F6;letter-spacing:-.02em;">수치</div>
-    <div style="font-size:12px;color:#9C9A94;margin-top:4px;">[출처]</div>
-  </div>
-</div>
-
-/* 인사이트 callout 박스 */
-<div style="border-radius:8px;padding:14px 18px;font-size:13px;line-height:1.7;margin-top:16px;background:#EEF4FF;border-left:3px solid #3B82F6;color:#1E3A6E;">
-  <strong>인사이트</strong> — 내용
-</div>
-<div style="...;background:#ECFDF5;border-left:3px solid #16A34A;color:#14532D;">초록 callout</div>
-<div style="...;background:#FFFBEB;border-left:3px solid #D97706;color:#78350F;">노랑 callout</div>
-<div style="...;background:#FEF2F2;border-left:3px solid #DC2626;color:#7F1D1D;">빨강 callout</div>
-
-/* 데이터 테이블 */
-<div style="border:1px solid #E8E6E0;border-radius:12px;overflow:hidden;">
-  <table style="width:100%;border-collapse:collapse;background:#fff;">
-    <thead><tr style="background:#F2F1EE;">
-      <th style="padding:10px 14px;text-align:left;font-size:11px;font-weight:700;color:#5C5B57;border-bottom:1px solid #E8E6E0;">컬럼</th>
-    </tr></thead>
-    <tbody><tr style="border-bottom:1px solid #E8E6E0;">
-      <td style="padding:11px 14px;font-size:13px;">데이터</td>
-    </tr></tbody>
-  </table>
-</div>
-
-/* 배지 */
-<span style="display:inline-flex;padding:2px 8px;border-radius:20px;font-size:11px;font-weight:700;background:#EEF4FF;color:#3B82F6;">파랑</span>
-<span style="...;background:#ECFDF5;color:#16A34A;">초록</span>
-<span style="...;background:#FFFBEB;color:#D97706;">노랑</span>
-<span style="...;background:#FEF2F2;color:#DC2626;">빨강</span>
-
-/* 2단 그리드 카드 */
-<div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">
-  <div style="background:#fff;border:1px solid #E8E6E0;border-radius:12px;padding:20px;"></div>
-</div>
-
-/* 섹션 레이블 (슬라이드 번호 표시) */
-<div style="font-size:12px;font-weight:600;color:#3B82F6;letter-spacing:.04em;text-transform:uppercase;margin-bottom:12px;">S번호 · 제목</div>
-
-/* 메인 제목 */
-<h2 style="font-size:clamp(24px,3vw,36px);font-weight:800;letter-spacing:-.03em;margin-bottom:8px;"></h2>
-
-/* 분석 범위 표시 (우측 상단) */
-<div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:24px;">
-  <div>제목 영역</div>
-  <div style="font-size:11px;color:#9C9A94;background:#F2F1EE;padding:4px 10px;border-radius:6px;">분석 범위: ...</div>
-</div>
-
-/* 포화도 바 */
-<div style="margin-top:8px;">
-  <div style="display:flex;justify-content:space-between;font-size:12px;margin-bottom:4px;">
-    <span style="font-weight:600;">항목명</span><span style="font-weight:700;">XX%</span>
-  </div>
-  <div style="height:8px;background:#E8E6E0;border-radius:4px;">
-    <div style="height:100%;width:XX%;background:#3B82F6;border-radius:4px;"></div>
-  </div>
-</div>
-
-/* 매출 시나리오 카드 3단 */
-<div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px;">
-  <div style="background:#fff;border:1px solid #E8E6E0;border-radius:12px;padding:22px;">
-    <div style="font-size:11px;font-weight:700;color:#9C9A94;text-transform:uppercase;margin-bottom:12px;">보수</div>
-    <div style="font-size:36px;font-weight:800;color:#9C9A94;letter-spacing:-.02em;margin-bottom:4px;">0.5%</div>
-    <div style="font-size:18px;font-weight:700;">○○○만원</div>
-  </div>
-  <div style="...;background:#FFFBEB;border-color:#FDE68A;"><!-- 중간: 노랑 강조 --></div>
-  <div style="...">낙관</div>
-</div>
+KPI카드: display:grid;grid-template-columns:repeat(3,1fr);gap:12px — 각 카드: background:#fff;border:1px solid #E8E6E0;border-radius:12px;padding:20px 22px
+Callout(파랑): background:#EEF4FF;border-left:3px solid #3B82F6;border-radius:8px;padding:14px 18px;font-size:13px
+Callout(초록): background:#ECFDF5;border-left:3px solid #16A34A
+Callout(노랑): background:#FFFBEB;border-left:3px solid #D97706
+테이블: border:1px solid #E8E6E0;border-radius:12px;overflow:hidden — th: background:#F2F1EE;padding:10px 14px;font-size:11px;font-weight:700 — td: padding:11px 14px;font-size:13px
+배지(파랑): display:inline-flex;padding:2px 8px;border-radius:20px;font-size:11px;font-weight:700;background:#EEF4FF;color:#3B82F6
+포화도바: height:8px;background:#E8E6E0;border-radius:4px — 내부채움: background:#3B82F6;height:100%;width:XX%
+매출시나리오: grid-template-columns:1fr 1fr 1fr;gap:12px — 보수:회색/낙관:파랑/중간:노랑(background:#FFFBEB)
+섹션레이블: font-size:12px;font-weight:600;color:#3B82F6;text-transform:uppercase
+메인제목: font-size:clamp(24px,3vw,36px);font-weight:800;letter-spacing:-.03em
 
 ═══ 제안서 작성 원칙 ═══
 - 이 제안서를 받는 사람은 고객사(제조사·브랜드)입니다. 판매·출시 결정을 돕는 제안서입니다.
@@ -291,15 +229,20 @@ SLIDE_START / SLIDE_END 로 반드시 각 슬라이드를 감싸세요.`
       },
       body: JSON.stringify({
         model: 'claude-sonnet-4-6',
-        max_tokens: 32000,
+        max_tokens: 16000,
         system: systemPrompt,
         messages: [{ role: 'user', content: userPrompt }],
       }),
     })
 
     if (!res.ok) {
-      const err = await res.json()
-      return NextResponse.json({ error: 'Claude API error: ' + (err.error?.message ?? res.status) }, { status: 400 })
+      let errMsg = 'Claude API error: ' + res.status
+      try {
+        const errBody = await res.text()
+        const errJson = JSON.parse(errBody)
+        errMsg = 'Claude API error: ' + (errJson.error?.message ?? errBody.slice(0, 200))
+      } catch {}
+      return NextResponse.json({ error: errMsg }, { status: 400 })
     }
 
     const data = await res.json()
