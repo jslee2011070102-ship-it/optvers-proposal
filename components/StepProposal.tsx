@@ -17,6 +17,19 @@ export default function StepProposal({ parsedData, keywords, scored, onBack }: P
   const [slides, setSlides] = useState<string[]>([])
   const [currentSlide, setCurrentSlide] = useState(0)
   const [error, setError] = useState('')
+  const [warningConfirmed, setWarningConfirmed] = useState(false)
+
+  // 사전 판정 계산 (생성 전 경고용)
+  const { stats } = parsedData
+  const step1Score = [
+    stats.keywordSearch >= 5000,
+    (stats.keywordSearchLastYear / 12) / Math.max(stats.keywordSearch, 1) < 2,
+    stats.categoryMonthlySales >= 3000000000,
+    stats.categoryMonthlyQty >= 50000,
+  ].filter(Boolean).length
+  const step2Pass = stats.top3SaturationSales < 50 && stats.top1SaturationSales < 35
+  const hasOpportunity = scored.filter(s => s.grade === 'S' || s.grade === 'A').length >= 1
+  const needsWarning = step1Score < 3 || (!step2Pass && !hasOpportunity)
 
   async function generate() {
     setLoading(true)
@@ -232,14 +245,53 @@ h1,h2,h3,h4 { font-weight:800; letter-spacing:-.03em; }
         </div>
       )}
 
-      <div style={{ display: 'flex', gap: '12px' }}>
-        <button className="btn-primary" style={{ background: 'var(--surface)', color: 'var(--text)', border: '1px solid var(--border)' }} onClick={onBack}>
-          ← 이전
-        </button>
-        <button className="btn-primary" style={{ flex: 1, justifyContent: 'center', background: 'var(--blue)' }} onClick={generate} disabled={loading}>
-          {loading ? '⏳ 생성 중...' : '⚡ 제안서 자동 생성'}
-        </button>
-      </div>
+      {/* 재검토 경고: 조건 미충족 시 생성 전 사용자에게 안내 */}
+      {needsWarning && !warningConfirmed && (
+        <div style={{
+          padding: '20px 24px', marginBottom: '20px',
+          background: '#FFFBEB', border: '1px solid #FDE68A', borderRadius: '12px',
+        }}>
+          <div style={{ display: 'flex', gap: '10px', alignItems: 'flex-start', marginBottom: '12px' }}>
+            <span style={{ fontSize: '20px' }}>⚠️</span>
+            <div>
+              <div style={{ fontSize: '14px', fontWeight: 700, color: '#92400E', marginBottom: '4px' }}>
+                데이터 검토가 필요한 시장입니다
+              </div>
+              <div style={{ fontSize: '13px', color: '#78350F', lineHeight: 1.7 }}>
+                {step1Score < 3 && <div>· 시장 규모 기준 {step1Score}/4 충족 — 월 검색량 또는 카테고리 매출이 기준치에 미달합니다</div>}
+                {!step2Pass && <div>· 포화도 기준 미충족 — 상위 제품 매출 집중도가 높아 진입 난이도가 높습니다</div>}
+                {!hasOpportunity && <div>· S·A등급 기회 키워드 없음 — 공백 키워드가 충분하지 않습니다</div>}
+              </div>
+            </div>
+          </div>
+          <div style={{ fontSize: '12px', color: '#92400E', background: '#FEF9C3', borderRadius: '6px', padding: '8px 12px', marginBottom: '12px' }}>
+            💡 그럼에도 제안서를 생성할 수 있습니다. 다만 고객사에 제출 시 위 사항을 사전에 공유하는 것을 권장합니다.
+          </div>
+          <div style={{ display: 'flex', gap: '8px' }}>
+            <button
+              onClick={onBack}
+              style={{ padding: '8px 16px', borderRadius: '8px', border: '1px solid #E8E6E0', background: '#fff', fontSize: '13px', cursor: 'pointer', fontWeight: 600 }}>
+              ← 이전으로
+            </button>
+            <button
+              onClick={() => setWarningConfirmed(true)}
+              style={{ padding: '8px 20px', borderRadius: '8px', border: 'none', background: '#D97706', color: '#fff', fontSize: '13px', cursor: 'pointer', fontWeight: 700 }}>
+              이해했습니다, 계속 생성하기 →
+            </button>
+          </div>
+        </div>
+      )}
+
+      {(!needsWarning || warningConfirmed) && (
+        <div style={{ display: 'flex', gap: '12px' }}>
+          <button className="btn-primary" style={{ background: 'var(--surface)', color: 'var(--text)', border: '1px solid var(--border)' }} onClick={onBack}>
+            ← 이전
+          </button>
+          <button className="btn-primary" style={{ flex: 1, justifyContent: 'center', background: 'var(--blue)' }} onClick={generate} disabled={loading}>
+            {loading ? '⏳ 생성 중...' : '⚡ 제안서 자동 생성'}
+          </button>
+        </div>
+      )}
     </div>
   )
 }
