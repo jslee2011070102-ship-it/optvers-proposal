@@ -96,8 +96,8 @@ export default function StepProposal({ parsedData, keywords, scored, onBack }: P
 
         {/* 슬라이드 렌더 */}
         <div style={{
-          border: '1px solid var(--border)', borderRadius: '12px', overflow: 'hidden',
-          background: '#F8F7F4', minHeight: '400px',
+          border: '1px solid var(--border)', borderRadius: '12px',
+          background: '#F8F7F4',
           padding: '40px 48px'
         }}>
           <div dangerouslySetInnerHTML={{ __html: slides[currentSlide] }} />
@@ -134,12 +134,16 @@ export default function StepProposal({ parsedData, keywords, scored, onBack }: P
   }
 
   function downloadHTML() {
+    // 마크다운 코드블록 태그 제거 후 슬라이드 구성
+    const cleanSlide = (s: string) =>
+      s.replace(/^```html\s*/i, '').replace(/^```\s*/i, '').replace(/\s*```$/i, '').trim()
+
     const slideContent = slides.map((s, i) => `
-      <section style="min-height:100vh;padding:80px 48px;background:#F8F7F4;page-break-after:always;">
-        <div style="max-width:900px;margin:0 auto;">${s}</div>
-        <div style="position:fixed;bottom:20px;right:32px;font-size:12px;color:#9C9A94;">${i+1} / ${slides.length}</div>
+      <section style="padding:80px 48px;background:#F8F7F4;page-break-after:always;min-height:100vh;">
+        <div style="max-width:900px;margin:0 auto;">${cleanSlide(s)}</div>
+        <div style="text-align:right;margin-top:40px;font-size:12px;color:#9C9A94;">${i+1} / ${slides.length}</div>
       </section>`
-    ).join('')
+    ).join('\n<hr style="border:none;border-top:2px dashed #E8E6E0;margin:0;">\n')
 
     const html = `<!DOCTYPE html>
 <html lang="ko">
@@ -149,7 +153,20 @@ export default function StepProposal({ parsedData, keywords, scored, onBack }: P
 <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;600;700;800;900&display=swap" rel="stylesheet">
 <style>
 * { margin:0; padding:0; box-sizing:border-box; }
-body { font-family:'Noto Sans KR',sans-serif; }
+:root {
+  --bg: #F8F7F4;
+  --surface: #FFFFFF;
+  --border: #E8E6E0;
+  --text: #191917;
+  --text2: #5C5B57;
+  --text3: #9C9A94;
+  --blue: #3B82F6;
+  --green: #16A34A;
+  --yellow: #D97706;
+}
+body { font-family:'Noto Sans KR',sans-serif; color:#191917; background:#F8F7F4; }
+h1,h2,h3,h4 { font-weight:800; letter-spacing:-.03em; }
+.card { background:#fff; border:1px solid #E8E6E0; border-radius:12px; padding:24px; }
 </style>
 </head>
 <body>${slideContent}</body>

@@ -91,7 +91,12 @@ export async function POST(req: NextRequest) {
     const parts = raw.split(SS)
     for (let i = 1; i < parts.length; i++) {
       const end = parts[i].indexOf(SE)
-      if (end !== -1) slides.push(parts[i].substring(0, end).trim())
+      if (end !== -1) {
+        let slide = parts[i].substring(0, end).trim()
+        // 마크다운 코드블록 태그 제거 (```html ... ```)
+        slide = slide.replace(/^```html\s*/i, '').replace(/^```\s*/i, '').replace(/\s*```$/i, '').trim()
+        slides.push(slide)
+      }
     }
     return NextResponse.json({ slides, raw })
   } catch (e) {
