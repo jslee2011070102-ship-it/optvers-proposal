@@ -183,7 +183,7 @@ export async function POST(req: NextRequest) {
 
 슬라이드 구성:
 S0 커버 — 핵심 KPI 3개 + 최종 판정 결론
-S1 시장 규모 — Step1 통과 여부 + 월 검색량/매출 수치 + 계절성 분석
+S1 시장 규모 — Step1 통과 여부 + 월 검색량/매출 수치 (계절성 언급 금지 — 데이터 없음)
 S2 경쟁 구조 — Step2 포화도 + 로켓 비율 + 전환율 + 벤치마크 비교표
 S3 상위 제품 분석 — 상위 10~20개 제품 테이블 (순위/상품명/가격/리뷰/전환율/배송)
 S4 소비자 탐색 패턴 — 인기키워드 순위표 + 자동완성 패턴 분류 + 검색 의도 해석
@@ -202,10 +202,11 @@ S9 최종 결론 — Step1/2/3 판정 결과표 + 최종 판정 + 다음 액션 
 ─── [Step 1] 시장 규모 ───
 월 검색량:        ${stats.keywordSearch.toLocaleString()}회 [키워드 분석 파일 · 월 검색량]
 작년 총 검색량:   ${stats.keywordSearchLastYear.toLocaleString()}회 [키워드 분석 파일 · 작년 총 검색량]
-월평균(작년):     ${Math.round(stats.keywordSearchLastYear / 12).toLocaleString()}회/월 → 계절성 ${(stats.keywordSearchLastYear / 12) / Math.max(stats.keywordSearch, 1) < 2 ? '안정적 (편차 2배 미만)' : '주의 필요 (편차 큼)'}
+작년 월평균:      ${Math.round(stats.keywordSearchLastYear / 12).toLocaleString()}회/월 (참고용 연간 평균 — 계절성 판단 불가, 동월 전년 비교 데이터 미제공)
+계절성 분석:      [데이터 없음 — 월별 세분화 데이터 미제공. S1 슬라이드에서 계절성 언급 금지]
 카테고리 월 매출: ${(stats.categoryMonthlySales / 100000000).toFixed(1)}억원 [쿠팡 대시보드 · 월간 총 매출]
 카테고리 월 판매량: ${stats.categoryMonthlyQty.toLocaleString()}개 [쿠팡 대시보드 · 월간 총 판매량]
-Step1 판정: ${step1Score}개/4개 기준 통과 → ${step1Score >= 3 ? '✅ 통과' : '⚠️ 재검토'}
+Step1 판정: ${step1Score}개/4개 기준 통과 → ${step1Score >= 3 ? '✅ 통과' : '⚠️ 기준 미달'}
 
 ─── [Step 2] 경쟁 구조 ───
 1위 매출 포화도:    ${stats.top1SaturationSales.toFixed(1)}% [키워드 분석 파일] → 기준(20% 미만 ◎ / 20~35% △ / 35% 초과 ✕): ${stats.top1SaturationSales < 20 ? '◎ 매우낮음' : stats.top1SaturationSales < 35 ? '△ 보통' : '✕ 높음'}
@@ -232,6 +233,22 @@ ${top20.map(p => `  ${p.rank}위 | ${p.name} | ${p.price.toLocaleString()}원 | 
 판정: ${finalVerdict}
 근거: ${verdictDetail}
 (Step1 ${step1Score}/4 충족 + Step2 ${step2Pass ? '포화도 기준 충족' : '포화도 주의'} + 공백키워드 ${opportunityKeywords.length}개 발견)
+
+─── [S7 전용] 공백 키워드 → 제품 제안 근거 ───
+아래 데이터를 S7 슬라이드의 제품 제안 근거로 반드시 활용하세요.
+"검색량은 많은데 상품명에 포함된 제품이 적다" = 수요는 있으나 공급이 부족한 공백 시장입니다.
+
+S등급 공백 키워드 (즉시 진입 추천):
+${gradeS.slice(0,5).map(k => `  ★ ${k.keyword}: 검색량 ${k.searchVolume.toLocaleString()}회 / 상품명 포함 제품 ${k.productCount}개 / 기회점수 ${k.opportunityScore}점
+S7에서 이 키워드를 상품명에 넣은 제품을 제안하세요.`).join('\n')}
+
+A등급 공백 키워드 (진입 추천):
+${gradeA.slice(0,5).map(k => `  ○ ${k.keyword}: 검색량 ${k.searchVolume.toLocaleString()}회 / 상품명 포함 제품 ${k.productCount}개 / 기회점수 ${k.opportunityScore}점`).join('\n')}
+
+제품 제안 방법:
+- S/A 등급 키워드 중 검색량이 높고 제품 수가 가장 적은 것 2~3개를 골라 제품을 제안합니다
+- 제품명 예시: [키워드]를 직접 포함한 상품명 (예: "강아지 심장 영양제 100정")
+- 경쟁 진입 가격: 상위 제품 평균가 대비 10~20% 저렴하거나, 동일가에 차별화 성분 추가
 
 === 작성 요청 ===
 
@@ -274,7 +291,7 @@ SLIDE_START / SLIDE_END 로 반드시 각 슬라이드를 감싸세요.`
       },
       body: JSON.stringify({
         model: 'claude-sonnet-4-6',
-        max_tokens: 16000,
+        max_tokens: 32000,
         system: systemPrompt,
         messages: [{ role: 'user', content: userPrompt }],
       }),

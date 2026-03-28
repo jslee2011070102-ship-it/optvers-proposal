@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useRef, useEffect } from 'react'
 import type { ParsedData, KeywordRow, ScoredKeyword } from '@/lib/types'
 
 interface Props {
@@ -10,14 +10,31 @@ interface Props {
   onBack: () => void
 }
 
+interface ChatMessage {
+  role: 'user' | 'assistant'
+  content: string
+}
+
 export default function StepProposal({ parsedData, keywords, scored, onBack }: Props) {
   const [loading, setLoading] = useState(false)
   const [progress, setProgress] = useState(0)
   const [progressMsg, setProgressMsg] = useState('')
   const [slides, setSlides] = useState<string[]>([])
+  const [rawContent, setRawContent] = useState('')
   const [currentSlide, setCurrentSlide] = useState(0)
   const [error, setError] = useState('')
   const [warningConfirmed, setWarningConfirmed] = useState(false)
+
+  // AI 채팅 상태
+  const [chatMessages, setChatMessages] = useState<ChatMessage[]>([])
+  const [chatInput, setChatInput] = useState('')
+  const [chatLoading, setChatLoading] = useState(false)
+  const [showChat, setShowChat] = useState(false)
+  const chatEndRef = useRef<HTMLDivElement>(null)
+
+  useEffect(() => {
+    chatEndRef.current?.scrollIntoView({ behavior: 'smooth' })
+  }, [chatMessages])
 
   // 사전 판정 계산 (생성 전 경고용)
   const { stats } = parsedData
@@ -36,6 +53,8 @@ export default function StepProposal({ parsedData, keywords, scored, onBack }: P
     setError('')
     setProgress(10)
     setProgressMsg('데이터를 준비하고 있습니다...')
+    setChatMessages([])
+    setShowChat(false)
 
     try {
       setProgress(30)
@@ -59,11 +78,54 @@ export default function StepProposal({ parsedData, keywords, scored, onBack }: P
       setProgress(100)
       setProgressMsg('완성!')
       setSlides(data.slides)
+      setRawContent(data.raw || '')
       setCurrentSlide(0)
     } catch (e) {
       setError(String(e))
     } finally {
       setLoading(false)
+    }
+  }
+
+  // AI 채팅으로 제안서 수정
+  async function sendChat() {
+    if (!chatInput.trim() || chatLoading) return
+    const userMsg = chatInput.trim()
+    setChatInput('')
+    setChatLoading(true)
+
+    const newMessages: ChatMessage[] = [...chatMessages, { role: 'user', content: userMsg }]
+    setChatMessages(newMessages)
+
+    try {
+      const res = await fetch('/api/chat-edit', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          messages: newMessages,
+          slides,
+          parsedData,
+          scored,
+        }),
+      })
+      const data = await res.json()
+      if (data.error) {
+        setChatMessages(prev => [...prev, { role: 'assistant', content: '⚠️ 오류: ' + data.error }])
+        return
+      }
+      setChatMessages(prev => [...prev, { role: 'assistant', content: data.reply }])
+      // 슬라이드가 업데이트된 경우
+      if (data.slides && data.slides.length > 0) {
+        setSlides(data.slides)
+        setChatMessages(prev => [...prev.slice(0, -1), {
+          role: 'assistant',
+          content: data.reply + '\n\n✅ 슬라이드가 업데이트되었습니다. 위에서 확인하세요.'
+        }])
+      }
+    } catch (e) {
+      setChatMessages(prev => [...prev, { role: 'assistant', content: '⚠️ 오류: ' + String(e) }])
+    } finally {
+      setChatLoading(false)
     }
   }
 
@@ -80,13 +142,22 @@ export default function StepProposal({ parsedData, keywords, scored, onBack }: P
               {slides.length}개 슬라이드가 생성되었습니다
             </h2>
           </div>
-          <button
-            className="btn-primary"
-            style={{ background: 'var(--blue)', fontSize: '13px', padding: '10px 20px' }}
-            onClick={downloadHTML}
-          >
-            ⬇ HTML 저장
-          </button>
+          <div style={{ display: 'flex', gap: '8px' }}>
+            <button
+              className="btn-primary"
+              style={{ background: 'var(--green)', fontSize: '13px', padding: '10px 20px' }}
+              onClick={() => setShowChat(v => !v)}
+            >
+              {showChat ? '✕ 채팅 닫기' : '💬 AI와 수정하기'}
+            </button>
+            <button
+              className="btn-primary"
+              style={{ background: 'var(--blue)', fontSize: '13px', padding: '10px 20px' }}
+              onClick={downloadHTML}
+            >
+              ⬇ HTML 저장
+            </button>
+          </div>
         </div>
 
         {/* 슬라이드 탭 */}
@@ -133,10 +204,106 @@ export default function StepProposal({ parsedData, keywords, scored, onBack }: P
           </button>
         </div>
 
+        {/* AI 채팅 인터페이스 */}
+        {showChat && (
+          <div style={{ marginTop: '28px', border: '1px solid var(--border)', borderRadius: '12px', overflow: 'hidden' }}>
+            {/* 채팅 헤더 */}
+            <div style={{ padding: '16px 20px', background: '#1a1a1a', color: '#fff', display: 'flex', alignItems: 'center', gap: '10px' }}>
+              <span style={{ fontSize: '18px' }}>💬</span>
+              <div>
+                <div style={{ fontSize: '14px', fontWeight: 700 }}>AI와 제안서 수정하기</div>
+                <div style={{ fontSize: '11px', color: '#9C9A94', marginTop: '2px' }}>
+                  슬라이드를 어떻게 바꾸고 싶은지 말해주세요. 예: "S7 슬라이드에 가격대 분석을 추가해줘"
+                </div>
+              </div>
+            </div>
+
+            {/* 메시지 목록 */}
+            <div style={{ maxHeight: '400px', overflowY: 'auto', padding: '16px 20px', background: '#F8F7F4', display: 'flex', flexDirection: 'column', gap: '12px' }}>
+              {chatMessages.length === 0 && (
+                <div style={{ textAlign: 'center', color: 'var(--text3)', fontSize: '13px', padding: '24px 0' }}>
+                  <div style={{ fontSize: '32px', marginBottom: '8px' }}>✍️</div>
+                  아직 대화가 없습니다. 아래에 수정 요청을 입력해보세요.
+                  <div style={{ marginTop: '16px', display: 'flex', gap: '8px', flexWrap: 'wrap', justifyContent: 'center' }}>
+                    {[
+                      'S7 슬라이드 제품 제안을 더 구체적으로 써줘',
+                      '표지 슬라이드 디자인을 더 강렬하게 바꿔줘',
+                      '매출 시나리오 수치를 현실적으로 조정해줘',
+                      '경쟁 분석에 진입 장벽을 추가해줘',
+                    ].map((q, i) => (
+                      <button key={i}
+                        onClick={() => setChatInput(q)}
+                        style={{
+                          padding: '6px 12px', borderRadius: '20px',
+                          background: 'var(--surface)', border: '1px solid var(--border)',
+                          fontSize: '12px', cursor: 'pointer', color: 'var(--text2)'
+                        }}
+                      >{q}</button>
+                    ))}
+                  </div>
+                </div>
+              )}
+              {chatMessages.map((msg, i) => (
+                <div key={i} style={{
+                  display: 'flex',
+                  justifyContent: msg.role === 'user' ? 'flex-end' : 'flex-start',
+                }}>
+                  <div style={{
+                    maxWidth: '85%',
+                    padding: '10px 14px',
+                    borderRadius: msg.role === 'user' ? '12px 12px 2px 12px' : '12px 12px 12px 2px',
+                    background: msg.role === 'user' ? '#1a1a1a' : '#fff',
+                    color: msg.role === 'user' ? '#fff' : 'var(--text)',
+                    fontSize: '13px',
+                    lineHeight: 1.6,
+                    border: msg.role === 'assistant' ? '1px solid var(--border)' : 'none',
+                    whiteSpace: 'pre-wrap',
+                  }}>
+                    {msg.content}
+                  </div>
+                </div>
+              ))}
+              {chatLoading && (
+                <div style={{ display: 'flex', justifyContent: 'flex-start' }}>
+                  <div style={{ padding: '10px 14px', borderRadius: '12px 12px 12px 2px', background: '#fff', border: '1px solid var(--border)', fontSize: '13px', color: 'var(--text3)' }}>
+                    ⏳ 분석 중...
+                  </div>
+                </div>
+              )}
+              <div ref={chatEndRef} />
+            </div>
+
+            {/* 입력창 */}
+            <div style={{ padding: '12px 16px', background: '#fff', borderTop: '1px solid var(--border)', display: 'flex', gap: '8px' }}>
+              <input
+                type="text"
+                value={chatInput}
+                onChange={e => setChatInput(e.target.value)}
+                onKeyDown={e => e.key === 'Enter' && !e.shiftKey && sendChat()}
+                placeholder="수정 요청을 입력하세요... (Enter로 전송)"
+                style={{
+                  flex: 1, padding: '10px 14px', borderRadius: '8px',
+                  border: '1px solid var(--border)', fontSize: '13px',
+                  outline: 'none', background: '#F8F7F4',
+                }}
+                disabled={chatLoading}
+              />
+              <button
+                className="btn-primary"
+                onClick={sendChat}
+                disabled={chatLoading || !chatInput.trim()}
+                style={{ padding: '10px 20px', fontSize: '13px', background: chatLoading ? undefined : '#1a1a1a' }}
+              >
+                전송
+              </button>
+            </div>
+          </div>
+        )}
+
         {/* 다시 생성 */}
         <div style={{ marginTop: '24px', textAlign: 'center' }}>
           <button
-            onClick={() => { setSlides([]); setProgress(0) }}
+            onClick={() => { setSlides([]); setProgress(0); setShowChat(false); setChatMessages([]) }}
             style={{ fontSize: '13px', color: 'var(--text3)', background: 'none', border: 'none', cursor: 'pointer', textDecoration: 'underline' }}
           >
             다시 생성하기
