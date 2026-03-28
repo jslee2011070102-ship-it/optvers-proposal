@@ -28,19 +28,19 @@ export default function StepScore({ parsedData, keywords, onComplete, onBack }: 
     <div>
       <div style={{ marginBottom: '28px' }}>
         <div style={{ fontSize: '12px', fontWeight: 600, color: 'var(--blue)', letterSpacing: '.06em', textTransform: 'uppercase', marginBottom: '10px' }}>
-          STEP 3 Â· ê¸°í ì ë³
+          STEP 3 · 기회 선별
         </div>
         <h2 style={{ fontSize: 'clamp(22px,3vw,30px)', fontWeight: 800, letterSpacing: '-.03em', marginBottom: '8px' }}>
-          ê²ìë ëê³  ê²½ì ë®ì í¤ìë
+          검색량 높고 경쟁 낮은 키워드
         </h2>
         <p style={{ fontSize: '14px', color: 'var(--text2)', lineHeight: 1.7 }}>
-          {scored.length}ê° í¤ìëë¥¼ ê¸°í ì ìë¡ ìë ììííìµëë¤.
-          <strong style={{ color: 'var(--green)' }}> Së±ê¸ {topS.length}ê°</strong>,
-          <strong style={{ color: 'var(--blue)' }}> Aë±ê¸ {topA.length}ê°</strong>ê° ì§ì ê¸°íìëë¤.
+          {scored.length}개 키워드를 기회 점수로 자동 순위화했습니다.
+          <strong style={{ color: 'var(--green)' }}> S등급 {topS.length}개</strong>,
+          <strong style={{ color: 'var(--blue)' }}> A등급 {topA.length}개</strong>가 진입 기회입니다.
         </p>
       </div>
 
-      {/* ë±ê¸ ìì½ */}
+      {/* 등급 요약 */}
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4,1fr)', gap: '10px', marginBottom: '24px' }}>
         {(['S', 'A', 'B', 'C'] as const).map(g => (
           <div key={g} className="card" style={{ textAlign: 'center', borderTop: `3px solid ${GRADE_COLORS[g]}` }}>
@@ -49,25 +49,25 @@ export default function StepScore({ parsedData, keywords, onComplete, onBack }: 
               {scored.filter(s => s.grade === g).length}
             </div>
             <div style={{ fontSize: '11px', color: 'var(--text3)' }}>
-              {g === 'S' ? 'ì¦ì ì ì ' : g === 'A' ? 'ì§ì ì°ì' : g === 'B' ? 'ê²í  íì' : 'ê²½ì ì¬í¨'}
+              {g === 'S' ? '즉시 선점' : g === 'A' ? '진입 우위' : g === 'B' ? '검토 필요' : '경쟁 심함'}
             </div>
           </div>
         ))}
       </div>
 
-      {/* ê¸°í í¤ìë ìì¸ */}
+      {/* 기회 키워드 상세 */}
       <div className="card" style={{ marginBottom: '24px' }}>
         <div style={{ fontSize: '13px', fontWeight: 700, color: 'var(--text2)', marginBottom: '16px' }}>
-          ê¸°í ì ì ìì (ì ì²´ {scored.length}ê°)
+          기회 점수 순위 (전체 {scored.length}개)
         </div>
         <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
           {scored.slice(0, 20).map((item, i) => (
             <div key={i} style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-              {/* ìì */}
+              {/* 순위 */}
               <div style={{ width: '24px', fontSize: '12px', fontWeight: 700, color: 'var(--text3)', flexShrink: 0 }}>
                 {i + 1}
               </div>
-              {/* ë±ê¸ ë°°ì§ */}
+              {/* 등급 배지 */}
               <div style={{
                 width: '28px', height: '28px', borderRadius: '6px',
                 background: GRADE_BG[item.grade], color: GRADE_COLORS[item.grade],
@@ -76,7 +76,7 @@ export default function StepScore({ parsedData, keywords, onComplete, onBack }: 
               }}>
                 {item.grade}
               </div>
-              {/* í¤ìë + ì´ì  */}
+              {/* 키워드 + 이유 */}
               <div style={{ flex: 1, minWidth: 0 }}>
                 <div style={{ fontSize: '14px', fontWeight: 700, marginBottom: '2px' }}>
                   {item.keyword}
@@ -85,10 +85,10 @@ export default function StepScore({ parsedData, keywords, onComplete, onBack }: 
                   {item.reason}
                 </div>
               </div>
-              {/* ì ì ë° */}
+              {/* 점수 바 */}
               <div style={{ width: '120px', flexShrink: 0 }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '3px' }}>
-                  <span style={{ fontSize: '11px', color: 'var(--text3)' }}>ê¸°í ì ì</span>
+                  <span style={{ fontSize: '11px', color: 'var(--text3)' }}>기회 점수</span>
                   <span style={{ fontSize: '11px', fontWeight: 700, color: GRADE_COLORS[item.grade] }}>{item.opportunityScore}</span>
                 </div>
                 <div className="score-bar">
@@ -103,30 +103,30 @@ export default function StepScore({ parsedData, keywords, onComplete, onBack }: 
         </div>
       </div>
 
-      {/* ë¶ì ì§ì¹¨ ìì½ */}
+      {/* 분석 지침 요약 */}
       <div className="card" style={{ marginBottom: '24px', background: '#ECFDF5', border: '1px solid #BBF7D0' }}>
         <div style={{ fontSize: '13px', fontWeight: 700, color: 'var(--green)', marginBottom: '10px' }}>
-          ð Step 1~2 íì  ê²°ê³¼
+          📊 Step 1~2 판정 결과
         </div>
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px', fontSize: '12px', color: 'var(--text2)' }}>
-          <div>1ì ë§¤ì¶ í¬íë: <strong>{parsedData.stats.top1SaturationSales.toFixed(1)}%</strong>
+          <div>1위 매출 포화도: <strong>{parsedData.stats.top1SaturationSales.toFixed(1)}%</strong>
             {' '}<span style={{ color: parsedData.stats.top1SaturationSales < 20 ? 'var(--green)' : 'var(--yellow)' }}>
-              {parsedData.stats.top1SaturationSales < 20 ? 'â' : 'â³'}
+              {parsedData.stats.top1SaturationSales < 20 ? '◎' : '△'}
             </span>
           </div>
-          <div>1~3ì ë§¤ì¶ í¬íë: <strong>{parsedData.stats.top3SaturationSales.toFixed(1)}%</strong>
+          <div>1~3위 매출 포화도: <strong>{parsedData.stats.top3SaturationSales.toFixed(1)}%</strong>
             {' '}<span style={{ color: parsedData.stats.top3SaturationSales < 50 ? 'var(--green)' : parsedData.stats.top3SaturationSales < 70 ? 'var(--yellow)' : 'var(--red-600)' }}>
-              {parsedData.stats.top3SaturationSales < 50 ? 'â' : parsedData.stats.top3SaturationSales < 70 ? 'â³' : 'â'}
+              {parsedData.stats.top3SaturationSales < 50 ? '◎' : parsedData.stats.top3SaturationSales < 70 ? '△' : '✕'}
             </span>
           </div>
-          <div>1~3ì ë¦¬ë·° í¬íë: <strong>{parsedData.stats.top3SaturationReview.toFixed(1)}%</strong>
+          <div>1~3위 리뷰 포화도: <strong>{parsedData.stats.top3SaturationReview.toFixed(1)}%</strong>
             {' '}<span style={{ color: parsedData.stats.top3SaturationReview < 40 ? 'var(--green)' : 'var(--yellow)' }}>
-              {parsedData.stats.top3SaturationReview < 40 ? 'â' : 'â³'}
+              {parsedData.stats.top3SaturationReview < 40 ? '◎' : '△'}
             </span>
           </div>
-          <div>ë¡ì¼ ê³ì´ ë°°ì¡: <strong>{parsedData.stats.rocketRatio.toFixed(1)}%</strong>
+          <div>로켓 계열 배송: <strong>{parsedData.stats.rocketRatio.toFixed(1)}%</strong>
             {' '}<span style={{ color: parsedData.stats.rocketRatio < 70 ? 'var(--green)' : parsedData.stats.rocketRatio < 80 ? 'var(--yellow)' : '#DC2626' }}>
-              {parsedData.stats.rocketRatio < 70 ? 'â' : parsedData.stats.rocketRatio < 80 ? 'â³' : 'â'}
+              {parsedData.stats.rocketRatio < 70 ? '◎' : parsedData.stats.rocketRatio < 80 ? '△' : '✕'}
             </span>
           </div>
         </div>
@@ -134,10 +134,10 @@ export default function StepScore({ parsedData, keywords, onComplete, onBack }: 
 
       <div style={{ display: 'flex', gap: '12px' }}>
         <button className="btn-primary" style={{ background: 'var(--surface)', color: 'var(--text)', border: '1px solid var(--border)' }} onClick={onBack}>
-          â ì´ì 
+          ← 이전
         </button>
         <button className="btn-primary" style={{ flex: 1, justifyContent: 'center' }} onClick={() => onComplete(scored)}>
-          ì ìì ìì±íê¸° â
+          제안서 생성하기 →
         </button>
       </div>
     </div>

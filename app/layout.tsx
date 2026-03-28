@@ -2,8 +2,8 @@ import type { Metadata } from 'next'
 import './globals.css'
 
 export const metadata: Metadata = {
-  title: 'Optvers â ì¿ í¡ ì ì í ì ìì ìì±ê¸°',
-  description: 'ìë¬ë¼ì´í ë°ì´í° ê¸°ë° ì ì í ì¶ì ì ìì ìë ìì±',
+  title: 'Optvers — 쿠팡 신제품 제안서 생성기',
+  description: '셀러라이프 데이터 기반 신제품 출시 제안서 자동 생성',
 }
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {

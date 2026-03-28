@@ -22,11 +22,11 @@ export default function StepProposal({ parsedData, keywords, scored, onBack }: P
     setLoading(true)
     setError('')
     setProgress(10)
-    setProgressMsg('ë°ì´í°ë¥¼ ì¤ë¹íê³  ììµëë¤...')
+    setProgressMsg('데이터를 준비하고 있습니다...')
 
     try {
       setProgress(30)
-      setProgressMsg('Claudeê° ë°ì´í°ë¥¼ ë¶ìíê³  ììµëë¤...')
+      setProgressMsg('Claude가 데이터를 분석하고 있습니다...')
 
       const res = await fetch('/api/generate', {
         method: 'POST',
@@ -35,16 +35,16 @@ export default function StepProposal({ parsedData, keywords, scored, onBack }: P
       })
 
       setProgress(80)
-      setProgressMsg('ì¬ë¼ì´ëë¥¼ êµ¬ì±íê³  ììµëë¤...')
+      setProgressMsg('슬라이드를 구성하고 있습니다...')
 
       const data = await res.json()
       if (!res.ok || data.error) {
-        setError(data.error || 'ì¤ë¥ê° ë°ìíìµëë¤')
+        setError(data.error || '오류가 발생했습니다')
         return
       }
 
       setProgress(100)
-      setProgressMsg('ìì±!')
+      setProgressMsg('완성!')
       setSlides(data.slides)
       setCurrentSlide(0)
     } catch (e) {
@@ -54,17 +54,17 @@ export default function StepProposal({ parsedData, keywords, scored, onBack }: P
     }
   }
 
-  // ì¬ë¼ì´ë ë·°ì´
+  // 슬라이드 뷰어
   if (slides.length > 0) {
     return (
       <div>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
           <div>
             <div style={{ fontSize: '12px', fontWeight: 600, color: 'var(--green)', letterSpacing: '.06em', textTransform: 'uppercase', marginBottom: '4px' }}>
-              â ì ìì ìì± ìë£
+              ✅ 제안서 생성 완료
             </div>
             <h2 style={{ fontSize: '22px', fontWeight: 800, letterSpacing: '-.03em' }}>
-              {slides.length}ê° ì¬ë¼ì´ëê° ìì±ëììµëë¤
+              {slides.length}개 슬라이드가 생성되었습니다
             </h2>
           </div>
           <button
@@ -72,11 +72,11 @@ export default function StepProposal({ parsedData, keywords, scored, onBack }: P
             style={{ background: 'var(--blue)', fontSize: '13px', padding: '10px 20px' }}
             onClick={downloadHTML}
           >
-            â¬ HTML ì ì¥
+            ⬇ HTML 저장
           </button>
         </div>
 
-        {/* ì¬ë¼ì´ë í­ */}
+        {/* 슬라이드 탭 */}
         <div style={{ display: 'flex', gap: '4px', marginBottom: '16px', flexWrap: 'wrap' }}>
           {slides.map((_, i) => (
             <button key={i}
@@ -94,7 +94,7 @@ export default function StepProposal({ parsedData, keywords, scored, onBack }: P
           ))}
         </div>
 
-        {/* ì¬ë¼ì´ë ë ë */}
+        {/* 슬라이드 렌더 */}
         <div style={{
           border: '1px solid var(--border)', borderRadius: '12px', overflow: 'hidden',
           background: '#F8F7F4', minHeight: '400px',
@@ -103,12 +103,12 @@ export default function StepProposal({ parsedData, keywords, scored, onBack }: P
           <div dangerouslySetInnerHTML={{ __html: slides[currentSlide] }} />
         </div>
 
-        {/* ë¤ë¹ê²ì´ì */}
+        {/* 네비게이션 */}
         <div style={{ display: 'flex', gap: '8px', marginTop: '16px', justifyContent: 'center', alignItems: 'center' }}>
           <button className="btn-primary" style={{ padding: '8px 20px', background: 'var(--surface)', color: 'var(--text)', border: '1px solid var(--border)' }}
             disabled={currentSlide === 0}
             onClick={() => setCurrentSlide(c => c - 1)}>
-            â ì´ì 
+            ← 이전
           </button>
           <span style={{ fontSize: '13px', color: 'var(--text3)', minWidth: '60px', textAlign: 'center' }}>
             {currentSlide + 1} / {slides.length}
@@ -116,17 +116,17 @@ export default function StepProposal({ parsedData, keywords, scored, onBack }: P
           <button className="btn-primary" style={{ padding: '8px 20px' }}
             disabled={currentSlide === slides.length - 1}
             onClick={() => setCurrentSlide(c => c + 1)}>
-            ë¤ì â
+            다음 →
           </button>
         </div>
 
-        {/* ë¤ì ìì± */}
+        {/* 다시 생성 */}
         <div style={{ marginTop: '24px', textAlign: 'center' }}>
           <button
             onClick={() => { setSlides([]); setProgress(0) }}
             style={{ fontSize: '13px', color: 'var(--text3)', background: 'none', border: 'none', cursor: 'pointer', textDecoration: 'underline' }}
           >
-            ë¤ì ìì±íê¸°
+            다시 생성하기
           </button>
         </div>
       </div>
@@ -145,7 +145,7 @@ export default function StepProposal({ parsedData, keywords, scored, onBack }: P
 <html lang="ko">
 <head>
 <meta charset="UTF-8">
-<title>ì¿ í¡ ì ì í ì ìì</title>
+<title>쿠팡 신제품 제안서</title>
 <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;600;700;800;900&display=swap" rel="stylesheet">
 <style>
 * { margin:0; padding:0; box-sizing:border-box; }
@@ -159,7 +159,7 @@ body { font-family:'Noto Sans KR',sans-serif; }
     const url = URL.createObjectURL(blob)
     const a = document.createElement('a')
     a.href = url
-    a.download = 'ì¿ í¡_ì ì í_ì ìì.html'
+    a.download = '쿠팡_신제품_제안서.html'
     a.click()
     URL.revokeObjectURL(url)
   }
@@ -168,37 +168,37 @@ body { font-family:'Noto Sans KR',sans-serif; }
     <div>
       <div style={{ marginBottom: '28px' }}>
         <div style={{ fontSize: '12px', fontWeight: 600, color: 'var(--blue)', letterSpacing: '.06em', textTransform: 'uppercase', marginBottom: '10px' }}>
-          STEP 4 Â· ì ìì ìì±
+          STEP 4 · 제안서 생성
         </div>
         <h2 style={{ fontSize: 'clamp(22px,3vw,30px)', fontWeight: 800, letterSpacing: '-.03em', marginBottom: '8px' }}>
-          Claude APIë¡ ì ììë¥¼ ìì±í©ëë¤
+          Claude API로 제안서를 생성합니다
         </h2>
         <p style={{ fontSize: '14px', color: 'var(--text2)', lineHeight: 1.7 }}>
-          ë¶ìí ë°ì´í°ë¥¼ ë°íì¼ë¡ 10ì¥ì§ë¦¬ ì¬ë¼ì´ë ì ììê° ìë ìì±ë©ëë¤. (ì½ 30~60ì´ ìì)
+          분석한 데이터를 바탕으로 10장짜리 슬라이드 제안서가 자동 생성됩니다. (약 30~60초 소요)
         </p>
       </div>
 
-      {/* ë¶ì ìì½ */}
+      {/* 분석 요약 */}
       <div className="card" style={{ marginBottom: '24px', background: '#EEF4FF', border: '1px solid #BFDBFE' }}>
         <div style={{ fontSize: '13px', fontWeight: 700, color: 'var(--blue)', marginBottom: '12px' }}>
-          ð ì´ë² ë¶ì ìì½
+          📋 이번 분석 요약
         </div>
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px', fontSize: '13px', color: 'var(--text2)' }}>
-          <div>ì¹´íê³ ë¦¬ ì ë§¤ì¶: <strong>{(parsedData.stats.categoryMonthlySales / 100000000).toFixed(1)}ìµì</strong></div>
-          <div>í¤ìë ì ê²ìë: <strong>{parsedData.stats.keywordSearch.toLocaleString()}í</strong></div>
-          <div>Së±ê¸ ê¸°í í¤ìë: <strong style={{ color: 'var(--green)' }}>{scored.filter(s => s.grade === 'S').length}ê°</strong></div>
-          <div>Aë±ê¸ ê¸°í í¤ìë: <strong style={{ color: 'var(--blue)' }}>{scored.filter(s => s.grade === 'A').length}ê°</strong></div>
+          <div>카테고리 월 매출: <strong>{(parsedData.stats.categoryMonthlySales / 100000000).toFixed(1)}억원</strong></div>
+          <div>키워드 월 검색량: <strong>{parsedData.stats.keywordSearch.toLocaleString()}회</strong></div>
+          <div>S등급 기회 키워드: <strong style={{ color: 'var(--green)' }}>{scored.filter(s => s.grade === 'S').length}개</strong></div>
+          <div>A등급 기회 키워드: <strong style={{ color: 'var(--blue)' }}>{scored.filter(s => s.grade === 'A').length}개</strong></div>
         </div>
         {scored.slice(0, 3).map((s, i) => (
           <div key={i} style={{ marginTop: '8px', padding: '8px 12px', background: '#fff', borderRadius: '6px', fontSize: '12px', color: 'var(--text2)' }}>
-            <strong>{s.keyword}</strong> â {s.reason}
+            <strong>{s.keyword}</strong> — {s.reason}
           </div>
         ))}
       </div>
 
 
 
-      {/* ì§í ìí */}
+      {/* 진행 상태 */}
       {loading && (
         <div className="card" style={{ marginBottom: '24px' }}>
           <div style={{ fontSize: '14px', fontWeight: 700, marginBottom: '8px' }}>{progressMsg}</div>
@@ -217,10 +217,10 @@ body { font-family:'Noto Sans KR',sans-serif; }
 
       <div style={{ display: 'flex', gap: '12px' }}>
         <button className="btn-primary" style={{ background: 'var(--surface)', color: 'var(--text)', border: '1px solid var(--border)' }} onClick={onBack}>
-          â ì´ì 
+          ← 이전
         </button>
         <button className="btn-primary" style={{ flex: 1, justifyContent: 'center', background: 'var(--blue)' }} onClick={generate} disabled={loading}>
-          {loading ? 'â³ ìì± ì¤...' : 'â¡ ì ìì ìë ìì±'}
+          {loading ? '⏳ 생성 중...' : '⚡ 제안서 자동 생성'}
         </button>
       </div>
     </div>

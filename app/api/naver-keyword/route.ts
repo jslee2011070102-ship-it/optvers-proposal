@@ -11,10 +11,10 @@ export async function POST(req: NextRequest) {
     const { keywords, customerId, apiKey, secretKey } = await req.json()
 
     if (!customerId || !apiKey || !secretKey) {
-      return NextResponse.json({ error: 'API í¤ê° ììµëë¤' }, { status: 400 })
+      return NextResponse.json({ error: 'API 키가 없습니다' }, { status: 400 })
     }
     if (!keywords || keywords.length === 0) {
-      return NextResponse.json({ error: 'í¤ìëê° ììµëë¤' }, { status: 400 })
+      return NextResponse.json({ error: '키워드가 없습니다' }, { status: 400 })
     }
 
     const timestamp = String(Date.now())
@@ -22,7 +22,7 @@ export async function POST(req: NextRequest) {
     const uri = '/keywordstool'
     const signature = makeSignature(timestamp, method, uri, secretKey)
 
-    // ë¤ì´ë² ê²ìê´ê³  APIë í¤ìë 5ê°ì© ë°°ì¹ ì²ë¦¬
+    // 네이버 검색광고 API는 키워드 5개씩 배치 처리
     const results: Record<string, { pc: number; mobile: number }> = {}
     const batches: string[][] = []
     for (let i = 0; i < keywords.length; i += 5) {
@@ -49,7 +49,7 @@ export async function POST(req: NextRequest) {
 
       if (!res.ok) {
         const err = await res.text()
-        return NextResponse.json({ error: `ë¤ì´ë² API ì¤ë¥: ${err}` }, { status: 400 })
+        return NextResponse.json({ error: `네이버 API 오류: ${err}` }, { status: 400 })
       }
 
       const data = await res.json()
