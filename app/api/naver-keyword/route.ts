@@ -8,10 +8,15 @@ function makeSignature(timestamp: string, method: string, uri: string, secretKey
 
 export async function POST(req: NextRequest) {
   try {
-    const { keywords, customerId, apiKey, secretKey } = await req.json()
+    const { keywords, customerId: bodyCustomerId, apiKey: bodyApiKey, secretKey: bodySecretKey } = await req.json()
+
+    // 환경변수에서 먼저 읽고, 없으면 요청 본문에서 읽기
+    const customerId = process.env.NAVER_CUSTOMER_ID || bodyCustomerId
+    const apiKey = process.env.NAVER_API_KEY || bodyApiKey
+    const secretKey = process.env.NAVER_SECRET_KEY || bodySecretKey
 
     if (!customerId || !apiKey || !secretKey) {
-      return NextResponse.json({ error: 'API 키가 없습니다' }, { status: 400 })
+      return NextResponse.json({ error: 'API 키가 없습니다 (환경변수 설정 또는 요청에 포함 필요)' }, { status: 400 })
     }
     if (!keywords || keywords.length === 0) {
       return NextResponse.json({ error: '키워드가 없습니다' }, { status: 400 })

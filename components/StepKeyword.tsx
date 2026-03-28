@@ -12,11 +12,9 @@ interface Props {
 
 export default function StepKeyword({ parsedData, onComplete, onBack }: Props) {
   const { stats, keywordProducts, keywordDashboard } = parsedData
-  const [naverCustomerId, setNaverCustomerId] = useState('')
-  const [naverApiKey, setNaverApiKey] = useState('')
-  const [naverSecretKey, setNaverSecretKey] = useState('')
   const [naverLoading, setNaverLoading] = useState(false)
   const [naverError, setNaverError] = useState('')
+  const [naverFetched, setNaverFetched] = useState(false)
   const [keywords, setKeywords] = useState<KeywordRow[]>([])
 
   // 셀러라이프 파일에서 인기키워드 기반으로 기본 키워드 리스트 생성
@@ -24,6 +22,13 @@ export default function StepKeyword({ parsedData, onComplete, onBack }: Props) {
     const baseKeywords = buildBaseKeywords()
     setKeywords(baseKeywords)
   }, [parsedData])
+
+  // 컴포넌트 로드 시 자동으로 네이버 API에서 검색량 가져오기
+  useEffect(() => {
+    if (keywords.length > 0 && !naverFetched) {
+      fetchNaverKeywords()
+    }
+  }, [keywords, naverFetched])
 
   function buildBaseKeywords(): KeywordRow[] {
     const mainKw = String(keywordDashboard['키워드'] || '').trim()
@@ -86,11 +91,6 @@ export default function StepKeyword({ parsedData, onComplete, onBack }: Props) {
   }
 
   async function fetchNaverKeywords() {
-    if (!naverCustomerId || !naverApiKey || !naverSecretKey) {
-      setNaverError('네이버 API 키 3가지를 모두 입력해주세요')
-      return
-    }
-
     setNaverLoading(true)
     setNaverError('')
 
@@ -101,15 +101,21 @@ export default function StepKeyword({ parsedData, onComplete, onBack }: Props) {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           keywords: kwList,
-          customerId: naverCustomerId,
-          apiKey: naverApiKey,
-          secretKey: naverSecretKey,
+          // 환경변수가 설정되어 있으면 사용, 없으면 null 전송
+          // 서버에서 환경변수 우선 사용
         }),
       })
 
       const data = await res.json()
-      if (!res.ok || data.error) {
+      if (!res.ok) {
+        // API 키가 없으면 오류, 있으면 성공
+        if (data.error && data.error.includes('API 키')) {
+          setNaverError('네이버 API 키가 설정되지 않았습니다. .env.local 파일에 설정 후 재실행하세요.')
+          setNaverFetched(true)
+          return
+        }
         setNaverError(data.error || '네이버 API 오류')
+        setNaverFetched(true)
         return
       }
 
@@ -125,8 +131,10 @@ export default function StepKeyword({ parsedData, onComplete, onBack }: Props) {
           source: 'naver' as const,
         }
       }))
+      setNaverFetched(true)
     } catch (e) {
       setNaverError(String(e))
+      setNaverFetched(true)
     } finally {
       setNaverLoading(false)
     }
@@ -168,60 +176,28 @@ export default function StepKeyword({ parsedData, onComplete, onBack }: Props) {
         </div>
       </div>
 
-      {/* 네이버 API 연결 */}
-      <div className="card" style={{ marginBottom: '24px' }}>
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
+      {/* 네이버 API 자동 연결 상태 */}
+      <div className="card" style={{ marginBottom: '24px', background: naverError ? '#FEF2F2' : naverFetched ? '#F0FDF4' : '#EEF4FF', border: `1px solid ${naverError ? '#FECACA' : naverFetched ? '#BBFF99' : '#BFDBFE'}` }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '8px' }}>
+          <div style={{ fontSize: '18px' }}>
+            {naverLoading ? '⏳' : naverError ? '⚠️' : naverFetched ? '✅' : '🔄'}
+          </div>
           <div>
-            <div style={{ fontSize: '14px', fontWeight: 700, marginBottom: '4px' }}>
-              네이버 광고 API 연결 <span className="badge badge-gray" style={{ marginLeft: '8px' }}>선택사항</span>
+            <div style={{ fontSize: '14px', fontWeight: 700 }}>
+              {naverLoading ? '네이버 API 검색량 가져오는 중...' : naverError ? '네이버 API 연결 안함' : naverFetched ? '네이버 API 연결 완료' : '네이버 API 자동 연결 중...'}
             </div>
-            <div style={{ fontSize: '12px', color: 'var(--text3)' }}>
-              연결하면 PC+모바일 정확한 검색량을 가져옵니다
+            <div style={{ fontSize: '12px', color: 'var(--text3)', marginTop: '2px' }}>
+              {naverError ? '셀러라이프 검색량으로 분석을 진행합니다' : naverFetched ? 'PC+모바일 정확한 검색량이 적용되었습니다' : '네이버 광고 API에서 정확한 검색량을 가져옵니다'}
             </div>
           </div>
         </div>
 
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '10px', marginBottom: '12px' }}>
-          <div>
-            <label style={{ fontSize: '11px', fontWeight: 600, color: 'var(--text3)', display: 'block', marginBottom: '4px' }}>CUSTOMER ID</label>
-            <input
-              type="text" placeholder="숫자 ID"
-              value={naverCustomerId}
-              onChange={e => setNaverCustomerId(e.target.value)}
-              style={{ width: '100%', padding: '8px 12px', border: '1px solid var(--border)', borderRadius: '8px', fontSize: '13px', background: 'var(--bg)', outline: 'none' }}
-            />
-          </div>
-          <div>
-            <label style={{ fontSize: '11px', fontWeight: 600, color: 'var(--text3)', display: 'block', marginBottom: '4px' }}>액세스 라이선스</label>
-            <input
-              type="password" placeholder="액세스 라이선스"
-              value={naverApiKey}
-              onChange={e => setNaverApiKey(e.target.value)}
-              style={{ width: '100%', padding: '8px 12px', border: '1px solid var(--border)', borderRadius: '8px', fontSize: '13px', background: 'var(--bg)', outline: 'none' }}
-            />
-          </div>
-          <div>
-            <label style={{ fontSize: '11px', fontWeight: 600, color: 'var(--text3)', display: 'block', marginBottom: '4px' }}>비밀키</label>
-            <input
-              type="password" placeholder="비밀키"
-              value={naverSecretKey}
-              onChange={e => setNaverSecretKey(e.target.value)}
-              style={{ width: '100%', padding: '8px 12px', border: '1px solid var(--border)', borderRadius: '8px', fontSize: '13px', background: 'var(--bg)', outline: 'none' }}
-            />
-          </div>
-        </div>
-
-        <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-          <button className="btn-blue" style={{ padding: '8px 20px', fontSize: '13px' }} onClick={fetchNaverKeywords} disabled={naverLoading}>
-            {naverLoading ? '⏳ 가져오는 중...' : '검색량 가져오기'}
-          </button>
-          <a href="https://searchad.naver.com" target="_blank" style={{ fontSize: '12px', color: 'var(--blue)', textDecoration: 'none' }}>
-            → API 키 발급받기
-          </a>
-        </div>
         {naverError && (
-          <div style={{ marginTop: '10px', fontSize: '12px', color: '#DC2626', padding: '8px 12px', background: '#FEF2F2', borderRadius: '6px' }}>
-            {naverError}
+          <div style={{ fontSize: '12px', color: '#DC2626', padding: '8px 12px', background: '#FFF5F5', borderRadius: '6px', marginTop: '8px' }}>
+            <strong>설정 필요:</strong> .env.local 파일에 NAVER_CUSTOMER_ID, NAVER_API_KEY, NAVER_SECRET_KEY를 설정하세요.
+            <a href="https://searchad.naver.com" target="_blank" style={{ display: 'block', marginTop: '4px', color: 'var(--blue)' }}>
+              → 네이버 검색광고에서 API 키 발급받기
+            </a>
           </div>
         )}
       </div>
