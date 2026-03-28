@@ -42,6 +42,9 @@ export async function POST(req: NextRequest) {
       '- 모든 수치에 [출처] 를 명시합니다',
       '- 분석 범위를 명확히 표기합니다',
       '출력 형식: 반드시 각 슬라이드를 ' + SS + ' 와 ' + SE + ' 로 감쌉니다.',
+      '중요: 각 슬라이드는 <html>, <head>, <body> 태그 없이 body 내부 HTML 조각만 출력하세요.',
+      '중요: height를 고정px로 지정하지 마세요. overflow:hidden을 사용하지 마세요.',
+      '중요: 내용이 자연스럽게 아래로 늘어나도록 min-height와 padding으로만 여백을 지정하세요.',
       '10개 슬라이드: S0커버 S1시장규모 S2경쟁구조 S3탐색패턴 S4~S6공백분석 S7제품방향 S8매출시나리오 S9결론',
       '배경 #F8F7F4, 강조 #3B82F6, 카드 border-radius:12px',
     ].join('\n')
@@ -93,8 +96,22 @@ export async function POST(req: NextRequest) {
       const end = parts[i].indexOf(SE)
       if (end !== -1) {
         let slide = parts[i].substring(0, end).trim()
+
         // 마크다운 코드블록 태그 제거 (```html ... ```)
         slide = slide.replace(/^```html\s*/i, '').replace(/^```\s*/i, '').replace(/\s*```$/i, '').trim()
+
+        // 완전한 HTML 문서로 생성된 경우 → <body> 내용만 추출
+        if (/<html[\s>]/i.test(slide)) {
+          const bodyMatch = slide.match(/<body[^>]*>([\s\S]*?)<\/body>/i)
+          if (bodyMatch) slide = bodyMatch[1].trim()
+        }
+
+        // 고정 height(720px 등)와 overflow:hidden 제거 → 스크롤 가능하게
+        slide = slide.replace(/height\s*:\s*\d+px/gi, 'min-height: auto')
+        slide = slide.replace(/overflow\s*:\s*hidden/gi, 'overflow: visible')
+        // width 고정도 제거 (1280px 등)
+        slide = slide.replace(/width\s*:\s*1280px/gi, 'width: 100%')
+
         slides.push(slide)
       }
     }
