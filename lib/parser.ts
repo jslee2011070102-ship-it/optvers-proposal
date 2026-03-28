@@ -136,4 +136,18 @@ export async function parseSellerlifeFiles(
     categoryFilename: categoryFile.name,
     keywordFilename: keywordFile.name,
     stats: {
-      categoryMonthlySales: toNum(catDb['월간 
+      categoryMonthlySales: toNum(catDb['월간 총 매출']),
+      categoryMonthlyQty: toNum(catDb['월간 총 판매량']),
+      keywordMonthlySales: toNum(kwDb['월간 총 매출']),
+      keywordSearch: toNum(kwDb['월 검색량']),
+      keywordSearchLastYear: toNum(kwDb['작년 총 검색량']),
+      top1SaturationSales: toNum(kwDb['1위 매출 포화도']),
+      top3SaturationSales: toNum(kwDb['1-3위 매출 포화도']),
+      top3SaturationReview: toNum(kwDb['1-3위 리뷰 포화도']),
+      rocketRatio,
+      top5AvgConversion,
+      popularKeywords,
+      autocompleteKeywords: [],
+    }
+  }
+}
