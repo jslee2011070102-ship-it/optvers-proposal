@@ -55,61 +55,59 @@ export default function StepUpload({ onComplete }: Props) {
         </p>
       </div>
 
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px', marginBottom: '24px' }}>
-        {/* 카테고리 파일 */}
+      <div style={{ marginBottom: '24px' }}>
+        {/* 통합 파일 업로드 */}
         <div
-          className={`drop-zone ${catFile ? 'done' : ''} ${catDrag ? 'drag-over' : ''}`}
+          className={`drop-zone ${catFile && kwFile ? 'done' : ''} ${catDrag || kwDrag ? 'drag-over' : ''}`}
           onDragOver={e => { e.preventDefault(); setCatDrag(true) }}
           onDragLeave={() => setCatDrag(false)}
-          onDrop={e => handleDrop(e, 'cat')}
+          onDrop={e => {
+            e.preventDefault()
+            const files = Array.from(e.dataTransfer.files)
+            files.forEach(f => {
+              if (f.name.includes('category')) setCatFile(f)
+              else if (f.name.includes('keyword')) setKwFile(f)
+            })
+            setCatDrag(false)
+            setKwDrag(false)
+          }}
           onClick={() => catRef.current?.click()}
+          style={{ textAlign: 'center', padding: '40px 20px' }}
         >
           <input
             ref={catRef} type="file" accept=".xlsx,.xls"
             style={{ display: 'none' }}
-            onChange={e => { const f = e.target.files?.[0]; if (f) setCatFile(f) }}
+            multiple
+            onChange={e => {
+              const files = Array.from(e.target.files || [])
+              files.forEach(f => {
+                if (f.name.includes('category')) setCatFile(f)
+                else if (f.name.includes('keyword')) setKwFile(f)
+              })
+            }}
           />
-          <div style={{ fontSize: '28px', marginBottom: '10px' }}>
-            {catFile ? '✅' : '📊'}
+          <div style={{ fontSize: '48px', marginBottom: '16px' }}>
+            {catFile && kwFile ? '✅' : '📁'}
           </div>
-          <div style={{ fontSize: '13px', fontWeight: 700, marginBottom: '4px', color: 'var(--text2)' }}>
-            카테고리 분석 파일
+          <div style={{ fontSize: '16px', fontWeight: 700, marginBottom: '8px', color: 'var(--text2)' }}>
+            셀러라이프 파일 2개를 여기에 드래그하세요
           </div>
-          <div style={{ fontSize: '11px', color: 'var(--text3)', marginBottom: '8px' }}>
-            sellerlife-coupang-category_*.xlsx
+          <div style={{ fontSize: '12px', color: 'var(--text3)', marginBottom: '12px' }}>
+            또는 클릭해서 선택
           </div>
           {catFile && (
-            <div style={{ fontSize: '12px', fontWeight: 600, color: 'var(--green)', wordBreak: 'break-all' }}>
-              {catFile.name}
+            <div style={{ fontSize: '12px', color: 'var(--green)', marginBottom: '4px' }}>
+              ✓ 카테고리: {catFile.name}
             </div>
           )}
-        </div>
-
-        {/* 키워드 파일 */}
-        <div
-          className={`drop-zone ${kwFile ? 'done' : ''} ${kwDrag ? 'drag-over' : ''}`}
-          onDragOver={e => { e.preventDefault(); setKwDrag(true) }}
-          onDragLeave={() => setKwDrag(false)}
-          onDrop={e => handleDrop(e, 'kw')}
-          onClick={() => kwRef.current?.click()}
-        >
-          <input
-            ref={kwRef} type="file" accept=".xlsx,.xls"
-            style={{ display: 'none' }}
-            onChange={e => { const f = e.target.files?.[0]; if (f) setKwFile(f) }}
-          />
-          <div style={{ fontSize: '28px', marginBottom: '10px' }}>
-            {kwFile ? '✅' : '🔍'}
-          </div>
-          <div style={{ fontSize: '13px', fontWeight: 700, marginBottom: '4px', color: 'var(--text2)' }}>
-            키워드 분석 파일
-          </div>
-          <div style={{ fontSize: '11px', color: 'var(--text3)', marginBottom: '8px' }}>
-            sellerlife-coupang-keyword_*.xlsx
-          </div>
           {kwFile && (
-            <div style={{ fontSize: '12px', fontWeight: 600, color: 'var(--green)', wordBreak: 'break-all' }}>
-              {kwFile.name}
+            <div style={{ fontSize: '12px', color: 'var(--green)' }}>
+              ✓ 키워드: {kwFile.name}
+            </div>
+          )}
+          {(!catFile || !kwFile) && (
+            <div style={{ fontSize: '11px', color: 'var(--text3)', marginTop: '12px' }}>
+              필요: sellerlife-coupang-category_*.xlsx, sellerlife-coupang-keyword_*.xlsx
             </div>
           )}
         </div>
