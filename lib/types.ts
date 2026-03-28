@@ -1,4 +1,4 @@
-// ìë¬ë¼ì´í íì¼ìì íì±ë ë°ì´í°
+// 셀러라이프 파일에서 파싱된 데이터
 export interface DashboardRow {
   [key: string]: string | number | null
 }
@@ -15,51 +15,51 @@ export interface ProductRow {
 }
 
 export interface ParsedData {
-  // ì¹´íê³ ë¦¬ íì¼
+  // 카테고리 파일
   categoryDashboard: DashboardRow
   categoryProducts: ProductRow[]
-  // í¤ìë íì¼
+  // 키워드 파일
   keywordDashboard: DashboardRow
   keywordProducts: ProductRow[]
-  // íì¼ëª (ì¹´íê³ ë¦¬ ì¶ì¶ì©)
+  // 파일명 (카테고리 추출용)
   categoryFilename: string
   keywordFilename: string
-  // í¸ì ìì¹
+  // 편의 수치
   stats: {
-    categoryMonthlySales: number      // ì¹´íê³ ë¦¬ ì ë§¤ì¶
-    categoryMonthlyQty: number        // ì¹´íê³ ë¦¬ ì íë§¤ë
-    keywordMonthlySales: number       // í¤ìë ì ë§¤ì¶
-    keywordSearch: number             // ì ê²ìë
-    keywordSearchLastYear: number     // ìë ì´ ê²ìë
-    top1SaturationSales: number       // 1ì ë§¤ì¶ í¬íë
-    top3SaturationSales: number       // 1-3ì ë§¤ì¶ í¬íë
-    top3SaturationReview: number      // 1-3ì ë¦¬ë·° í¬íë
-    rocketRatio: number               // ë¡ì¼ ê³ì´ ë°°ì¡ ë¹ì¨
-    top5AvgConversion: number         // ìì 5ê° íê·  ì íì¨
-    popularKeywords: { kw: string; vol: number }[]   // ì¸ê¸°í¤ìë
-    autocompleteKeywords: string[]    // ìëìì± í¤ìë
+    categoryMonthlySales: number      // 카테고리 월 매출
+    categoryMonthlyQty: number        // 카테고리 월 판매량
+    keywordMonthlySales: number       // 키워드 월 매출
+    keywordSearch: number             // 월 검색량
+    keywordSearchLastYear: number     // 작년 총 검색량
+    top1SaturationSales: number       // 1위 매출 포화도
+    top3SaturationSales: number       // 1-3위 매출 포화도
+    top3SaturationReview: number      // 1-3위 리뷰 포화도
+    rocketRatio: number               // 로켓 계열 배송 비율
+    top5AvgConversion: number         // 상위 5개 평균 전환율
+    popularKeywords: { kw: string; vol: number }[]   // 인기키워드
+    autocompleteKeywords: string[]    // 자동완성 키워드
   }
 }
 
-// ë¤ì´ë² API + ìë¬ë¼ì´í ê²ìë ì¡°í©
+// 네이버 API + 셀러라이프 검색량 조합
 export interface KeywordRow {
   keyword: string
   naverSearchPC: number | null
   naverSearchMobile: number | null
   naverSearchTotal: number | null
-  coupangSearch: number | null       // ìë¬ë¼ì´íìì ì½ì ì¿ í¡ ê²ìë
-  productCount: number               // ìíëª í¬í¨ ì í ì
+  coupangSearch: number | null       // 셀러라이프에서 읽은 쿠팡 검색량
+  productCount: number               // 상품명 포함 제품 수
   competition: 'low' | 'medium' | 'high'
   source: 'sellerlife' | 'naver'
 }
 
-// ê¸°í í¤ìë ì¤ì½ì´ë§
+// 기회 키워드 스코어링
 export interface ScoredKeyword {
   keyword: string
-  searchVolume: number               // ê²ìë (ë¤ì´ë² or ì¿ í¡)
-  productCount: number               // ê²½ì ì í ì
-  saturationScore: number            // í¬íë (ë®ììë¡ ì¢ì)
-  opportunityScore: number           // ê¸°í ì ì (ëììë¡ ì¢ì, 0~100)
+  searchVolume: number               // 검색량 (네이버 or 쿠팡)
+  productCount: number               // 경쟁 제품 수
+  saturationScore: number            // 포화도 (낮을수록 좋음)
+  opportunityScore: number           // 기회 점수 (높을수록 좋음, 0~100)
   grade: 'S' | 'A' | 'B' | 'C'
-  reason: string                     // ì ë³ ì´ì 
+  reason: string                     // 선별 이유
 }
