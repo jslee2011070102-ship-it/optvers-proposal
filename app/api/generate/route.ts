@@ -21,7 +21,7 @@ export async function POST(req: NextRequest) {
     })()
 
     // 포화도 벤치마크 정보
-    const saturationRate = stats['1-3위_매출_포화도'] || 0
+    const saturationRate = stats.top3SaturationSales || 0
     let saturationLevel = ''
     if (saturationRate < 20) {
       saturationLevel = '매우 낮음 (강력히 추천) ✨'
@@ -53,7 +53,7 @@ export async function POST(req: NextRequest) {
       '분석일: ' + new Date().toISOString().split('T')[0],
       '',
       '[Step 1] 시장 규모',
-      '- 월 검색량: ' + (stats.monthlySearchVolume || 0).toLocaleString() + '회 [쿠팡 대시보드]',
+      '- 월 검색량: ' + (stats.keywordSearch || 0).toLocaleString() + '회 [쿠팡 대시보드]',
       '- 월간 총 매출: ' + (stats.categoryMonthlySales / 100000000).toFixed(1) + '억 원 [쿠팡 대시보드]',
       '',
       '[Step 2] 경쟁 분석',
