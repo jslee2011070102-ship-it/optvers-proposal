@@ -259,7 +259,40 @@ STEP D — 각 카테고리별로 제품명을 만드세요
 
 SLIDE_START / SLIDE_END 로 각 슬라이드를 감싸세요.`
 
-    // ── 두 호출 병렬 실행 ──
+    // ── 검증 에이전트 시스템 프롬프트 ──
+    const validatorSystem = `당신은 쿠팡 신제품 제안의 품질을 검증하는 전문 평가자입니다.
+카테고리: ${categoryName}
+목표: 제안된 제품이 실제로 이 카테고리에서 팔릴 수 있는지 객관적으로 평가
+
+평가 기준:
+1. 이 제품이 ${categoryName} 카테고리에서 실제로 팔리거나 팔릴 수 있는가?
+2. 이 카테고리 고객이 실제로 이 제품을 사겠는가? (단순 논리가 아닌 실제 구매 가능성)
+3. 제품명이 논리적으로 성립하는가? (카테고리 혼용, 브랜드명 포함, 마케팅 문구 포함 체크)
+4. 서로 다른 제품 카테고리 키워드를 결합했는가? (예: 마스크 + 바이브레이터)
+
+평가 규칙:
+- 카테고리 외부 제품 제안 → 즉시 불합격
+- 제품명에 브랜드명 포함 → 즉시 불합격
+- 서로 다른 카테고리 키워드 결합 → 즉시 불합격
+- 논리적으로 성립하지 않는 조합 → 불합격
+
+마지막 줄에 반드시:
+✅ VALIDATION: PASS
+또는
+❌ VALIDATION: FAIL — 불합격 이유 (한 줄 요약)`
+
+    // ── 검증 프롬프트 ──
+    const createValidatorPrompt = (slide7Html: string) => `
+아래는 생성된 슬라이드 7(최종 제품 제안)입니다:
+
+===슬라이드 7 시작===
+${slide7Html.slice(0, 3000)}
+===슬라이드 7 끝===
+
+이 슬라이드의 제품 제안이 위 평가 기준을 충족하는지 검증하세요.
+제품명, 카테고리 적합성, 논리적 성립 여부를 중심으로 평가하세요.`
+
+    // ── 두 호출 병렬 실행 (슬라이드 1~4) ──
     const [rawA, rawB] = await Promise.all([
       callClaude(claudeKey, systemPrompt, promptA),
       callClaude(claudeKey, systemPrompt, promptB),
@@ -267,9 +300,74 @@ SLIDE_START / SLIDE_END 로 각 슬라이드를 감싸세요.`
 
     const slidesA = parseSlides(rawA)
     const slidesB = parseSlides(rawB)
-    const slides = [...slidesA, ...slidesB]
 
-    return NextResponse.json({ slides, raw: rawA + '\n\n' + rawB })
+    // 슬라이드 5, 6 확보
+    const slides56 = slidesB.slice(0, 2)
+    let slide7 = slidesB[2] || ''
+
+    // ── 검증 에이전트: 슬라이드 7 검증 및 재생성 루프 ──
+    let validationPass = false
+    let retryCount = 0
+    const maxRetries = 2
+
+    while (!validationPass && retryCount < maxRetries) {
+      // 검증
+      const validationResult = await callClaude(
+        claudeKey,
+        validatorSystem,
+        createValidatorPrompt(slide7)
+      )
+
+      if (validationResult.includes('VALIDATION: PASS')) {
+        validationPass = true
+        break
+      } else {
+        retryCount++
+        if (retryCount < maxRetries) {
+          // 재생성: 더 엄격한 지침으로 다시 생성
+          const retryPrompt = `${commonData}
+
+[키워드 상세 데이터]
+${gapLines}
+
+[제품 제안 근거 — 고검색/저공급 키워드]
+${productGuidance}
+상위5개 평균 판매가: ${avgPrice.toLocaleString()}원
+
+주의: 이전 제안이 검증 실패했습니다.
+다음을 반드시 확인하세요:
+- 서로 다른 제품 카테고리 키워드를 절대 합치지 마세요
+- 브랜드명을 제품명에 포함시키지 마세요
+- 제품이 실제로 이 카테고리에서 팔릴 수 있어야 합니다
+
+=== 슬라이드 7만 다시 작성하세요 ===
+[슬라이드 7] 이 제품을 출시하면 됩니다 ★★★
+
+기존 슬라이드 5, 6의 내용:
+${slides56.join('\n')}
+
+위 슬라이드 5, 6의 분석을 바탕으로 더욱 신중하게 제품을 제안하세요.
+상단: "${finalVerdict}" .callout.green 배너 + 근거 한 줄
+중간: .g2 그리드로 2개 제품 제안 (.prod-card.featured 사용)
+하단: .steps 3단 액션카드
+
+SLIDE_START / SLIDE_END 로 감싸세요.`
+
+          const retryRaw = await callClaude(claudeKey, systemPrompt, retryPrompt)
+          const retrySlides = parseSlides(retryRaw)
+          slide7 = retrySlides[0] || slide7
+        }
+      }
+    }
+
+    const finalSlides = [...slidesA, ...slides56, slide7]
+
+    return NextResponse.json({
+      slides: finalSlides,
+      raw: rawA + '\n\n' + rawB,
+      validationPassed: validationPass,
+      validationAttempts: retryCount + 1,
+    })
   } catch (e) {
     return NextResponse.json({ error: String(e) }, { status: 500 })
   }
