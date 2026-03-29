@@ -163,20 +163,25 @@ export default function StepProposal({ parsedData, keywords, scored, onBack }: P
 
         {/* 슬라이드 탭 */}
         <div style={{ display: 'flex', gap: '4px', marginBottom: '16px', flexWrap: 'wrap' }}>
-          {slides.map((_, i) => (
-            <button key={i}
-              onClick={() => setCurrentSlide(i)}
-              style={{
-                padding: '5px 12px', borderRadius: '6px', cursor: 'pointer',
-                fontSize: '12px', fontWeight: 600,
-                background: i === currentSlide ? '#1a1a1a' : 'var(--surface)',
-                color: i === currentSlide ? '#fff' : 'var(--text3)',
-                border: `1px solid ${i === currentSlide ? '#1a1a1a' : 'var(--border)'}`,
-              }}
-            >
-              {i + 1}
-            </button>
-          ))}
+          {slides.map((_, i) => {
+            const SLIDE_NAMES = ['표지', '시장규모', '경쟁구조', '상위제품', '키워드×공급', 'S/A키워드', '출시결론']
+            const label = SLIDE_NAMES[i] ?? `${i + 1}`
+            return (
+              <button key={i}
+                onClick={() => setCurrentSlide(i)}
+                style={{
+                  padding: '5px 12px', borderRadius: '6px', cursor: 'pointer',
+                  fontSize: '12px', fontWeight: 600,
+                  background: i === currentSlide ? '#1a1a1a' : 'var(--surface)',
+                  color: i === currentSlide ? '#fff' : 'var(--text3)',
+                  border: `1px solid ${i === currentSlide ? '#1a1a1a' : 'var(--border)'}`,
+                  whiteSpace: 'nowrap',
+                }}
+              >
+                {i + 1}. {label}
+              </button>
+            )
+          })}
         </div>
 
         {/* 슬라이드 렌더 — CSS를 직접 주입해서 항상 동일한 스타일 보장 */}

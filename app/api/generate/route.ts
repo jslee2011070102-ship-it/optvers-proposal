@@ -144,7 +144,7 @@ ${CLASS_GUIDE}
 
 [최종판정] ${finalVerdict} — ${verdictDetail}`
 
-    // ── 전반부 프롬프트: S0~S4 ──
+    // ── 전반부 프롬프트: 슬라이드 1~4 ──
     const promptA = `${commonData}
 
 [상위제품 목록]
@@ -154,42 +154,80 @@ ${top20.map(p => `${p.rank}위|${p.name}|${p.price.toLocaleString()}원|리뷰${
 ${popularKwData.map(k => `${k.keyword}: 검색${k.vol.toLocaleString()}회, 상품명포함${k.productCount}개`).join(' / ')}
 자동완성: ${autoKeywords.slice(0, 15).join(', ')}
 
-=== S0~S4 슬라이드 4장을 작성하세요 ===
-S0: 커버 — 카테고리명, 핵심KPI 3개(월검색량/월매출/월판매량), 최종판정(${finalVerdict}) 배너
-S1: 시장규모 — Step1 판정표 + 수치카드 + 인사이트 callout (계절성 언급 절대 금지 — 데이터없음)
-S2: 경쟁구조 — 포화도/로켓비율/전환율 수치카드 + 포화도바 시각화 + 경쟁강도 해석
-S3: 상위제품분석 — 상위10~20개 제품 전체 테이블 (순위/상품명/가격/리뷰/전환율/월매출/배송)
-S4: 소비자탐색패턴 — 인기키워드 순위표 + 자동완성 패턴분류 + 검색의도 해석
+=== 슬라이드 4장을 작성하세요 ===
 
-각 슬라이드마다 하단에 callout 박스로 핵심 인사이트 1~2줄.
-SLIDE_START / SLIDE_END 로 각 슬라이드를 감싸세요.`
+[슬라이드 1] 표지
+- .cover-kpi 그리드로 핵심 KPI 3개 카드: 월검색량 / 카테고리 월매출 / 월판매량
+- 카테고리명을 .heading으로 큰 제목
+- 최종판정 배너: "${finalVerdict}" — .callout.${step1Score >= 3 && step2Pass ? 'green' : step1Score >= 3 ? 'blue' : 'yellow'} 스타일로
+- 하단에 분석일·데이터 출처 안내
 
-    // ── 후반부 프롬프트: S5~S9 ──
+[슬라이드 2] 시장규모 분석
+- .kpi-row로 월검색량/월매출/월판매량 수치 카드 (.kpi-val.blue)
+- Step1 판정 기준 4개를 .logic 컴포넌트로 통과(✅)/미달(⚠️) 표시
+- 중요: 계절성 언급 절대 금지 (월별 데이터 없음)
+- .callout.blue로 핵심 인사이트
+
+[슬라이드 3] 경쟁구조 분석
+- .kpi-row로 1위포화도/1~3위포화도/로켓비율 수치 카드
+- .stat-list로 포화도 바 시각화 (1위/3위/리뷰/전환율)
+- 포화도 기준 해설: 50% 미만=진입가능, 50~70%=주의, 70%초과=과포화
+- .callout.${step2Pass ? 'green' : 'yellow'}로 경쟁강도 판정 인사이트
+
+[슬라이드 4] 상위 제품 분석
+- .tbl-wrap 테이블: 순위/상품명/가격/리뷰/전환율/월매출/배송 전체 표시
+- 상위 3위 행은 .tr-hl-b (파랑 강조)
+- .callout.blue로 상위 제품의 공통 특징 인사이트 (가격대·배송·리뷰 패턴)
+
+각 슬라이드를 SLIDE_START / SLIDE_END 로 감싸세요.`
+
+    // ── 후반부 프롬프트: 슬라이드 5~7 ──
     const gapLines = topKeywords.map(k =>
       `[${k.grade}] ${k.keyword}: 검색${k.searchVolume.toLocaleString()}회, 상품명포함${k.productCount}개, 기회점수${k.opportunityScore}, ${k.reason}`
     ).join('\n')
 
-    const s7guidance = `
-공백키워드→제품제안:
-${gradeS.slice(0, 5).map(k => `★S등급 ${k.keyword}: 검색${k.searchVolume.toLocaleString()}회, 상품${k.productCount}개 → 이 키워드를 상품명에 포함한 제품을 제안`).join('\n')}
-${gradeA.slice(0, 5).map(k => `○A등급 ${k.keyword}: 검색${k.searchVolume.toLocaleString()}회, 상품${k.productCount}개`).join('\n')}
-상위5평균가: ${avgPrice.toLocaleString()}원`
+    const productGuidance = [
+      ...gradeS.slice(0, 5).map(k => `★S등급 ${k.keyword}: 검색${k.searchVolume.toLocaleString()}회, 상품${k.productCount}개`),
+      ...gradeA.slice(0, 5).map(k => `○A등급 ${k.keyword}: 검색${k.searchVolume.toLocaleString()}회, 상품${k.productCount}개`),
+    ].join('\n')
 
     const promptB = `${commonData}
 
-[기회키워드 상세]
+[키워드 상세 데이터]
 ${gapLines}
-${s7guidance}
 
-=== S5~S9 슬라이드 5장을 작성하세요 ===
-S5: 공백분석 — 인기키워드×상품명포함수 테이블 (고검색/저공급 강조) + 진입기회 해석
-S6: 기회키워드선별 — S/A등급 키워드 상세표 (검색량/상품수/기회점수/이유) + 등급 배지
-S7: 제품방향제안 — 2~3개 구체적 제품 각각: {제품방향한줄 / 타겟키워드(공백N개) / 가격포지션 / 상품명예시1~2개}
-S8: 매출시나리오 — 보수(시장점유0.5%)/중간(1%)/낙관(2%) 3단 카드 + 전제조건 + [가정값]표기
-S9: 최종결론 — ${finalVerdict} 배너 + Step1/2/3 체크리스트 + 진입전제조건 + 다음액션 3단계
+[제품 제안 근거 — 고검색/저공급 키워드]
+${productGuidance}
+상위5개 평균 판매가: ${avgPrice.toLocaleString()}원
 
-S7은 "이 제품을 만들면 되겠다"는 확신을 주는 수준으로 구체적으로 작성하세요.
-S9는 반드시 다음 액션 체크리스트로 마무리하세요.
+=== 슬라이드 3장을 작성하세요 ===
+
+[슬라이드 5] 인기 키워드 × 상품 공급 교차분석
+- .tbl-wrap 테이블: 키워드명 / 쿠팡 검색량 / 상품명 포함 제품 수 / 공급 밀도 평가
+- 검색량 높고 제품 수 적은 행은 .tr-hl-g (초록 = 진입 기회)
+- 검색량 높고 제품 수 많은 행은 .tr-hl-r (빨강 = 포화)
+- .callout.green으로 "이 키워드들이 공백입니다" 핵심 인사이트
+
+[슬라이드 6] S/A등급 키워드 상세 분석
+- .tbl-wrap 테이블: 등급배지(.badge.green/.badge.blue) / 키워드 / 검색량 / 상품명포함수 / 기회점수 / 선정이유
+- S등급 행 .tr-hl-g, A등급 행 .tr-hl-b
+- .g2 그리드로 "S등급이란?" / "A등급이란?" 설명 카드
+- .callout.green으로 "이 키워드가 진입 포인트" 인사이트
+
+[슬라이드 7] 이 제품을 출시하면 됩니다 ★★★
+- 이 슬라이드는 제안서의 핵심 결론입니다. 고객사가 "이거 만들면 되겠다"고 확신하게 만드세요.
+- 상단: "${finalVerdict}" .callout.green 배너 + 근거 한 줄
+- 중간: .g2 또는 .g3 그리드로 2~3개 구체적 제품 제안
+  각 제품마다 .prod-card 사용:
+  - .prod-tag: "1순위 추천" / "2순위 추천"
+  - .prod-name: 실제 상품명 예시 (S/A등급 키워드를 그대로 넣은 이름)
+  - .prod-rows로 세부 정보:
+    타겟키워드: [키워드명] — 검색 N회, 상품명 포함 제품 N개만 존재
+    가격포지션: 상위 평균(${avgPrice.toLocaleString()}원) 대비 추천 구간
+    차별화포인트: 경쟁사에 없는 특징
+- 하단: .steps 3단 액션카드: 1단계(제품 개발) → 2단계(로켓배송 등록) → 3단계(키워드 광고)
+- .callout.green으로 최종 메시지
+
 SLIDE_START / SLIDE_END 로 각 슬라이드를 감싸세요.`
 
     // ── 두 호출 병렬 실행 ──
