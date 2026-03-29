@@ -185,6 +185,8 @@ export async function POST(req: NextRequest) {
 - "재검토"라는 단어를 절대 사용하지 마세요.
 - <html><head><body> 태그 없이 body 내부 HTML 조각만 출력하세요.
 - height 고정 px 금지. overflow:hidden 금지.
+- 테이블 셀에서 word-break: break-word 사용 (줄바꿈 자연스럽게)
+- 모든 텍스트는 한글로만 작성 (한자, 영문, 중국어 금지)
 
 데이터 역할 분담:
 - 네이버 데이터: 전체 소비자 수요, 검색 키워드, 연관 검색 패턴 (소비자 니즈의 절대 출처)
@@ -246,9 +248,14 @@ ${allNaverKeywords.slice(0, 10).map(k => `${k.kw}: 검색 ${k.vol.toLocaleString
 각 슬라이드를 SLIDE_START / SLIDE_END 로 감싸세요.`
 
     // ── 후반부 프롬프트: 슬라이드 5~7 (네이버 기회 키워드 중심) ──
-    const gapLines = topOpportunities.map(k =>
-      `[${k.grade}] ${k.keyword}: 네이버 검색${k.naverSearchVolume.toLocaleString()}회, 쿠팡 상품${k.coupangProductCount}개, 기회점수${k.opportunityScore}, ${k.reason}`
-    ).join('\n')
+    const gapLines = topOpportunities.map(k => {
+      // 네이버 검색량이 0이면 빈 값으로 표시 (실제 데이터가 없는 경우)
+      const searchDisplay = k.naverSearchVolume > 0
+        ? `네이버 검색${k.naverSearchVolume.toLocaleString()}회`
+        : ''
+      const searchPart = searchDisplay ? `${searchDisplay}, ` : ''
+      return `[${k.grade}] ${k.keyword}: ${searchPart}쿠팡 상품${k.coupangProductCount}개, 기회점수${k.opportunityScore}, ${k.reason}`
+    }).join('\n')
 
     const productGuidance = [
       ...opportunityS.slice(0, 5).map(k => `★S등급 ${k.keyword}: 네이버검색${k.naverSearchVolume.toLocaleString()}회, 쿠팡상품${k.coupangProductCount}개`),
@@ -284,6 +291,7 @@ ${naverConsumerNeedsSummary}
 - .tbl-wrap 테이블: 키워드명 / 네이버 월검색량 / 쿠팡 상품명 포함 제품 수 / 공급 밀도 평가
 - 검색량 높고 제품 수 적은 행은 .tr-hl-g (초록 = 진입 기회)
 - 검색량 높고 제품 수 많은 행은 .tr-hl-r (빨강 = 포화)
+- 주의: 일부 확장 키워드의 검색량 데이터가 없을 수 있으나, 쿠팡 상품 수가 적으면 기회 키워드로 평가됨
 - .callout.green으로 "네이버에서는 검색되지만 쿠팡에는 부족한 키워드들" 핵심 인사이트
 
 [슬라이드 6] S/A등급 기회 키워드 상세 분석
@@ -292,14 +300,14 @@ ${naverConsumerNeedsSummary}
 - .g2 그리드로 "S등급이란?" / "A등급이란?" 설명 카드
 - .callout.green으로 "진입 포인트 키워드" 인사이트
 
-[슬라이드 7] 이 제품을 출시하면 됩니다 ★★★
-이 슬라이드는 제안서의 핵심 결론입니다. 고객사가 "이거 만들면 되겠다"고 확신하게 만드세요.
+[슬라이드 7] 출시 전략 선택 — 보수적 vs 공격적 ★★★
+이 슬라이드는 제안서의 핵심 결론입니다. 비즈니스 목표에 맞는 두 가지 전략을 제시하세요.
 
 ━━━ 제품 제안 논리: 네이버 수요 + 쿠팡 공급 매칭 ━━━
 
 STEP 1 — 네이버 소비자 니즈 파악
-전체 네이버 키워드 중 S/A 등급 기회 키워드 선택.
-자동완성 키워드를 분석해서, 소비자가 찾는 제품의 특징(소재, 크기, 기능 등)을 파악하세요.
+전체 네이버 키워드 중 S/A 등급 기회 키워드를 분석.
+자동완성 키워드에서 소비자가 찾는 제품의 특징(소재, 크기, 기능 등)을 파악.
 예: 자동완성에 "실리콘", "방수", "10단계" 등장 → 소비자는 "실리콘 방수 제품"을 찾는다
 
 STEP 2 — 쿠팡 실제 공급 상황 확인
@@ -314,10 +322,10 @@ STEP 4 — 제품 카테고리 검증 (중요!)
 이 제품이 단일 카테고리인가? 다른 카테고리 키워드와 섞여 있지는 않은가?
 예시 불합격: "마스크"(페이스마스크) + "바이브레이터" = 다른 카테고리 혼용 금지
 
-STEP 5 — 쿠팡 상위 제품 분석 기반 제품명 생성
-네이버 니즈 + 쿠팡 상위 제품의 가격대/용량/특징 분석 + 자동완성 키워드
-형식: [소재/특징] + [제품카테고리명] + [핵심 차별화 특성]
-예시: "실리콘 바이브레이터 10단계 진동 방수형" (검색 8,630회 수요, 시장 2개만 공급)
+STEP 5 — 두 가지 출시 전략 중 선택
+🟦 보수적 전략: 시장 검증도 높은 키워드 (경쟁사 5개 이상) 선택
+🟧 공격적 전략: 고검색/저공급 기회 키워드 (경쟁사 0~3개) 선택
+각 전략의 장단점을 고려하여 선택하세요.
 
 ━━━ 절대 금지 사항 ━━━
 ✕ 서로 다른 제품 카테고리 키워드를 하나의 제품으로 합치기
@@ -327,15 +335,43 @@ STEP 5 — 쿠팡 상위 제품 분석 기반 제품명 생성
 
 ━━━ 슬라이드 구성 ━━━
 - 상단: "${finalVerdict}" .callout.green 배너 + 근거 한 줄
-- 중간: .g2 그리드로 2개 구체적 제품 제안 (.prod-card.featured 사용)
-  각 제품 .prod-rows 구성:
-  · 타겟키워드: S/A등급 기회 키워드 1개 — 네이버 검색 N회, 쿠팡 상품 N개 (공급 공백 설명)
-  · 소비자 니즈: 네이버 자동완성에서 도출한 소비자가 원하는 특징 (3가지)
-  · 가격포지션: 상위 평균(${avgPrice.toLocaleString()}원) 대비 추천 구간 + 근거
-  · 소재/스펙: 구체적 소재와 핵심 스펙 (자동완성 + 상위제품 분석 기반)
-  · 차별화포인트: 쿠팡 상위 제품과 비교해서 추가할 특징 1~2가지
-- 하단: .steps 3단 액션카드: 1단계(제품 개발·샘플링) → 2단계(로켓배송 등록) → 3단계(타겟 키워드 광고)
-- .callout.green으로 최종 메시지: "네이버에서 OOO를 찾는데(검색 N회), 쿠팡에는 OOO 제품이 부족합니다(N개). 이 제품으로 진입하세요."
+
+- 중단: .g2 그리드로 2가지 전략을 명확하게 대조
+
+좌측 카드 (.prod-card.conservative - 파랑):
+  🟦 보수적 전략: "검증된 시장 공략"
+  - 전략: A등급 고검증도 키워드 선택 (경쟁사 5개 이상 = 시장 검증됨)
+  - 추천 키워드: ${opportunityA.length > 0 ? opportunityA[0].keyword : '[A등급 기회 키워드]'}${opportunityA.length > 0 ? ` (검색 ${opportunityA[0].naverSearchVolume.toLocaleString()}회, 쿠팡 상품 ${opportunityA[0].coupangProductCount}개)` : ''}
+  - 장점:
+    ✅ 경쟁사 사례 풍부 (마케팅·가격·기능 참고 가능)
+    ✅ 수요 확실성 높음 (실제 거래 증명)
+    ✅ 실패율 낮음 (약 60~70% 성공률)
+  - 단점:
+    ❌ 경쟁 치열 (진입 난이도 높음)
+    ❌ 마진율 낮을 수 있음 (가격 경쟁)
+    ❌ 포화도 높음 (빠른 의사결정 필요)
+  - 추천 대상: 안정적 매출 원하는 경우, 빠른 현금화 필요 시
+
+우측 카드 (.prod-card.aggressive - 주황):
+  🟧 공격적 전략: "미충족 수요 개척"
+  - 전략: S등급 고기회도 키워드 선택 (경쟁사 0~3개 = 미검증 상태)
+  - 추천 키워드: ${opportunityS.length > 0 ? opportunityS[0].keyword : '[S등급 기회 키워드]'}${opportunityS.length > 0 ? ` (검색 ${opportunityS[0].naverSearchVolume.toLocaleString()}회, 쿠팡 상품 ${opportunityS[0].coupangProductCount}개)` : ''}
+  - 장점:
+    ✅ 경쟁 거의 없음 (선점 가능)
+    ✅ 높은 수익성 (마진율 높음)
+    ✅ 차별화 용이 (유일성 확보)
+  - 단점:
+    ❌ 시장 검증 부족 (실제 수요 미확인)
+    ❌ 실패율 높음 (약 30~40% 성공률)
+    ❌ 개발·마케팅 리스크 높음 (초기 투자 큼)
+  - 추천 대상: 높은 수익률 추구, 리스크 감수 가능 시
+
+- 하단: .steps 3단 액션카드 (두 전략 공통)
+  1단계: 제품 개발 및 샘플링
+  2단계: 로켓배송 등록
+  3단계: 타겟 키워드 광고 (선택 키워드 기반)
+
+- .callout.green으로 최종 메시지: "네이버에서 [선택 키워드]를 찾는데(검색 N회), 쿠팡에는 경쟁 제품이 [상황]. 이 제품으로 진입하세요."
 
 SLIDE_START / SLIDE_END 로 각 슬라이드를 감싸세요.`
 
