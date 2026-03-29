@@ -34,7 +34,7 @@ export default function StepKeyword({ parsedData, onComplete, onBack }: Props) {
     const mainKw = String(keywordDashboard['키워드'] || '').trim()
     const mainVol = Number(keywordDashboard['월 검색량']) || 0
 
-    // 셀러라이프 상품명 분석으로 연관 키워드 추출
+    // 셀러라이프 상품명 분석으로 연관 키워드 추출 (보조용)
     const kwFreq: Record<string, number> = {}
     const stopWords = new Set(['강아지', '고양이', '반려', '동물', '펫', '1개', '2개', '세트', '정', 'g', 'ml', 'kg', '100g', '30정', '60정'])
 
@@ -50,9 +50,9 @@ export default function StepKeyword({ parsedData, onComplete, onBack }: Props) {
     }
 
     // 빈도 높은 키워드 → 실제 상품명 포함 카운트
+    // v1.3: 20개 제한 제거 - 모든 키워드 활용
     const sortedKws = Object.entries(kwFreq)
       .sort((a, b) => b[1] - a[1])
-      .slice(0, 20)
       .map(([kw]) => kw)
 
     const rows: KeywordRow[] = []
@@ -71,7 +71,7 @@ export default function StepKeyword({ parsedData, onComplete, onBack }: Props) {
       })
     }
 
-    // 연관 키워드 (상품명에서 추출)
+    // 연관 키워드 (상품명에서 추출) - 제한 없음
     for (const kw of sortedKws) {
       if (kw === mainKw) continue
       const count = countProductsWithKeyword(kw, keywordProducts)
@@ -95,42 +95,73 @@ export default function StepKeyword({ parsedData, onComplete, onBack }: Props) {
     setNaverError('')
 
     try {
-      const kwList = keywords.map(k => k.keyword).slice(0, 30)
-      const res = await fetch('/api/naver-keyword', {
+      const mainKw = String(keywordDashboard['키워드'] || '').trim()
+
+      // Step 1: 메인 키워드의 연관검색어를 모두 조회
+      const relatedRes = await fetch('/api/naver-keyword', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          keywords: kwList,
-          // 환경변수가 설정되어 있으면 사용, 없으면 null 전송
-          // 서버에서 환경변수 우선 사용
+          type: 'related',
+          keywords: mainKw ? [mainKw] : [],
         }),
       })
 
-      const data = await res.json()
-      if (!res.ok) {
-        // API 키가 없으면 오류, 있으면 성공
-        if (data.error && data.error.includes('API 키')) {
+      if (!relatedRes.ok) {
+        const relatedData = await relatedRes.json()
+        if (relatedData.error && relatedData.error.includes('API 키')) {
           setNaverError('네이버 API 키가 설정되지 않았습니다. .env.local 파일에 설정 후 재실행하세요.')
           setNaverFetched(true)
           return
         }
-        setNaverError(data.error || '네이버 API 오류')
+        setNaverError(relatedData.error || '네이버 연관검색어 조회 오류')
         setNaverFetched(true)
         return
       }
 
-      // 검색량 업데이트
-      setKeywords(prev => prev.map(kw => {
-        const naverData = data.results[kw.keyword]
-        if (!naverData) return kw
-        return {
-          ...kw,
-          naverSearchPC: naverData.pc,
-          naverSearchMobile: naverData.mobile,
-          naverSearchTotal: naverData.pc + naverData.mobile,
-          source: 'naver' as const,
+      const relatedData = await relatedRes.json()
+      const relatedKeywords = relatedData.relatedKeywords || []
+
+      // Step 2: 연관검색어를 keywords 배열에 추가
+      let updatedKeywords = [...keywords]
+
+      for (const related of relatedKeywords) {
+        // 중복 제거
+        if (!updatedKeywords.find(k => k.keyword === related.keyword)) {
+          updatedKeywords.push({
+            keyword: related.keyword,
+            naverSearchPC: related.pc,
+            naverSearchMobile: related.mobile,
+            naverSearchTotal: related.pc + related.mobile,
+            coupangSearch: null,
+            productCount: countProductsWithKeyword(related.keyword, keywordProducts),
+            competition: 'medium',
+            source: 'naver',
+          })
+        } else {
+          // 이미 있는 키워드면 네이버 데이터로 업데이트
+          updatedKeywords = updatedKeywords.map(k =>
+            k.keyword === related.keyword
+              ? {
+                  ...k,
+                  naverSearchPC: related.pc,
+                  naverSearchMobile: related.mobile,
+                  naverSearchTotal: related.pc + related.mobile,
+                  source: 'naver' as const,
+                }
+              : k
+          )
         }
-      }))
+      }
+
+      // Step 3: 정렬 (검색량 높은 순)
+      updatedKeywords.sort((a, b) => {
+        const volA = a.naverSearchTotal ?? a.coupangSearch ?? 0
+        const volB = b.naverSearchTotal ?? b.coupangSearch ?? 0
+        return volB - volA
+      })
+
+      setKeywords(updatedKeywords)
       setNaverFetched(true)
     } catch (e) {
       setNaverError(String(e))
@@ -218,7 +249,7 @@ export default function StepKeyword({ parsedData, onComplete, onBack }: Props) {
               </tr>
             </thead>
             <tbody>
-              {keywords.slice(0, 30).map((kw, i) => {
+              {keywords.map((kw, i) => {
                 const vol = kw.naverSearchTotal ?? kw.coupangSearch ?? 0
                 return (
                   <tr key={i}>

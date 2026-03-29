@@ -61,7 +61,7 @@ export default function StepScore({ parsedData, keywords, onComplete, onBack }: 
           기회 점수 순위 (전체 {scored.length}개)
         </div>
         <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
-          {scored.slice(0, 20).map((item, i) => (
+          {scored.map((item, i) => (
             <div key={i} style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
               {/* 순위 */}
               <div style={{ width: '24px', fontSize: '12px', fontWeight: 700, color: 'var(--text3)', flexShrink: 0 }}>

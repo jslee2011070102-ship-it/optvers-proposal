@@ -8,7 +8,8 @@ function makeSignature(timestamp: string, method: string, uri: string, secretKey
 
 export async function POST(req: NextRequest) {
   try {
-    const { keywords, customerId: bodyCustomerId, apiKey: bodyApiKey, secretKey: bodySecretKey } = await req.json()
+    const body = await req.json()
+    const { keywords, type = 'search', customerId: bodyCustomerId, apiKey: bodyApiKey, secretKey: bodySecretKey } = body
 
     // 환경변수에서 먼저 읽고, 없으면 요청 본문에서 읽기
     const customerId = process.env.NAVER_CUSTOMER_ID || bodyCustomerId
@@ -27,51 +28,101 @@ export async function POST(req: NextRequest) {
     const uri = '/keywordstool'
     const signature = makeSignature(timestamp, method, uri, secretKey)
 
-    // 네이버 검색광고 API는 키워드 5개씩 배치 처리
-    const results: Record<string, { pc: number; mobile: number }> = {}
-    const batches: string[][] = []
-    for (let i = 0; i < keywords.length; i += 5) {
-      batches.push(keywords.slice(i, i + 5))
-    }
+    // type이 'related'면 연관검색어만 추출, 'search'면 검색량 조회
+    if (type === 'related') {
+      // 연관검색어 조회 모드: 메인 키워드의 모든 연관 키워드 반환
+      const relatedKeywords: { keyword: string; pc: number; mobile: number }[] = []
 
-    for (const batch of batches) {
-      const params = new URLSearchParams()
-      batch.forEach(kw => params.append('hintKeywords', kw))
-      params.set('showDetail', '1')
+      for (const mainKeyword of keywords) {
+        const params = new URLSearchParams()
+        params.append('hintKeywords', mainKeyword)
+        params.set('showDetail', '1')
 
-      const res = await fetch(
-        `https://api.naver.com/keywordstool?${params.toString()}`,
-        {
-          headers: {
-            'Content-Type': 'application/json',
-            'X-Timestamp': timestamp,
-            'X-API-KEY': apiKey,
-            'X-Customer': customerId,
-            'X-Signature': signature,
-          },
+        const res = await fetch(
+          `https://api.naver.com/keywordstool?${params.toString()}`,
+          {
+            headers: {
+              'Content-Type': 'application/json',
+              'X-Timestamp': timestamp,
+              'X-API-KEY': apiKey,
+              'X-Customer': customerId,
+              'X-Signature': signature,
+            },
+          }
+        )
+
+        if (!res.ok) {
+          const err = await res.text()
+          console.error('네이버 API 오류:', err)
+          continue
         }
-      )
 
-      if (!res.ok) {
-        const err = await res.text()
-        return NextResponse.json({ error: `네이버 API 오류: ${err}` }, { status: 400 })
-      }
+        const data = await res.json()
+        const list = data.keywordList || []
 
-      const data = await res.json()
-      const list = data.keywordList || []
+        // 모든 연관 키워드 추출 (메인 키워드 자신 포함)
+        for (const item of list) {
+          const kw = item.relKeyword
+          if (kw) {
+            const pc = item.monthlyPcQcCnt === '< 10' ? 5 : Number(item.monthlyPcQcCnt) || 0
+            const mobile = item.monthlyMobileQcCnt === '< 10' ? 5 : Number(item.monthlyMobileQcCnt) || 0
 
-      for (const item of list) {
-        const kw = item.relKeyword
-        if (kw && batch.includes(kw)) {
-          results[kw] = {
-            pc: item.monthlyPcQcCnt === '< 10' ? 5 : Number(item.monthlyPcQcCnt) || 0,
-            mobile: item.monthlyMobileQcCnt === '< 10' ? 5 : Number(item.monthlyMobileQcCnt) || 0,
+            // 중복 제거
+            if (!relatedKeywords.find(k => k.keyword === kw)) {
+              relatedKeywords.push({ keyword: kw, pc, mobile })
+            }
           }
         }
       }
-    }
 
-    return NextResponse.json({ results })
+      return NextResponse.json({ relatedKeywords })
+    } else {
+      // 검색량 조회 모드 (기존 로직)
+      const results: Record<string, { pc: number; mobile: number }> = {}
+      const batches: string[][] = []
+      for (let i = 0; i < keywords.length; i += 5) {
+        batches.push(keywords.slice(i, i + 5))
+      }
+
+      for (const batch of batches) {
+        const params = new URLSearchParams()
+        batch.forEach(kw => params.append('hintKeywords', kw))
+        params.set('showDetail', '1')
+
+        const res = await fetch(
+          `https://api.naver.com/keywordstool?${params.toString()}`,
+          {
+            headers: {
+              'Content-Type': 'application/json',
+              'X-Timestamp': timestamp,
+              'X-API-KEY': apiKey,
+              'X-Customer': customerId,
+              'X-Signature': signature,
+            },
+          }
+        )
+
+        if (!res.ok) {
+          const err = await res.text()
+          return NextResponse.json({ error: `네이버 API 오류: ${err}` }, { status: 400 })
+        }
+
+        const data = await res.json()
+        const list = data.keywordList || []
+
+        for (const item of list) {
+          const kw = item.relKeyword
+          if (kw && batch.includes(kw)) {
+            results[kw] = {
+              pc: item.monthlyPcQcCnt === '< 10' ? 5 : Number(item.monthlyPcQcCnt) || 0,
+              mobile: item.monthlyMobileQcCnt === '< 10' ? 5 : Number(item.monthlyMobileQcCnt) || 0,
+            }
+          }
+        }
+      }
+
+      return NextResponse.json({ results })
+    }
   } catch (e) {
     return NextResponse.json({ error: String(e) }, { status: 500 })
   }
