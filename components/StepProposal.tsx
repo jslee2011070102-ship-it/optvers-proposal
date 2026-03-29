@@ -2,6 +2,7 @@
 
 import { useState, useRef, useEffect } from 'react'
 import type { ParsedData, KeywordRow, ScoredKeyword } from '@/lib/types'
+import { SLIDE_CSS } from '@/lib/slide-styles'
 
 interface Props {
   parsedData: ParsedData
@@ -178,13 +179,11 @@ export default function StepProposal({ parsedData, keywords, scored, onBack }: P
           ))}
         </div>
 
-        {/* 슬라이드 렌더 */}
-        <div style={{
-          border: '1px solid var(--border)', borderRadius: '12px',
-          background: '#F8F7F4',
-          padding: '40px 48px'
-        }}>
-          <div dangerouslySetInnerHTML={{ __html: slides[currentSlide] }} />
+        {/* 슬라이드 렌더 — CSS를 직접 주입해서 항상 동일한 스타일 보장 */}
+        <div style={{ border: '1px solid var(--border)', borderRadius: '12px', overflow: 'hidden' }}>
+          <div dangerouslySetInnerHTML={{
+            __html: `<style>${SLIDE_CSS}</style><div class="slide-inner">${slides[currentSlide]}</div>`
+          }} />
         </div>
 
         {/* 네비게이션 */}
@@ -314,14 +313,10 @@ export default function StepProposal({ parsedData, keywords, scored, onBack }: P
   }
 
   function downloadHTML() {
-    // 마크다운 코드블록 태그 제거 후 슬라이드 구성
-    const cleanSlide = (s: string) =>
-      s.replace(/^```html\s*/i, '').replace(/^```\s*/i, '').replace(/\s*```$/i, '').trim()
-
     const slideContent = slides.map((s, i) => `
-      <section style="padding:80px 48px;background:#F8F7F4;page-break-after:always;min-height:100vh;">
-        <div style="max-width:900px;margin:0 auto;">${cleanSlide(s)}</div>
-        <div style="text-align:right;margin-top:40px;font-size:12px;color:#9C9A94;">${i+1} / ${slides.length}</div>
+      <section class="page" style="page-break-after:always;">
+        <div class="slide-inner">${s}</div>
+        <div style="text-align:right;padding:0 32px 16px;font-size:12px;color:#9C9A94;font-weight:600;">${i+1} / ${slides.length}</div>
       </section>`
     ).join('\n<hr style="border:none;border-top:2px dashed #E8E6E0;margin:0;">\n')
 
@@ -330,23 +325,9 @@ export default function StepProposal({ parsedData, keywords, scored, onBack }: P
 <head>
 <meta charset="UTF-8">
 <title>쿠팡 신제품 제안서</title>
-<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;600;700;800;900&display=swap" rel="stylesheet">
-<style>
-* { margin:0; padding:0; box-sizing:border-box; }
-:root {
-  --bg: #F8F7F4;
-  --surface: #FFFFFF;
-  --border: #E8E6E0;
-  --text: #191917;
-  --text2: #5C5B57;
-  --text3: #9C9A94;
-  --blue: #3B82F6;
-  --green: #16A34A;
-  --yellow: #D97706;
-}
-body { font-family:'Noto Sans KR',sans-serif; color:#191917; background:#F8F7F4; }
-h1,h2,h3,h4 { font-weight:800; letter-spacing:-.03em; }
-.card { background:#fff; border:1px solid #E8E6E0; border-radius:12px; padding:24px; }
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<style>${SLIDE_CSS}
+.page{min-height:100vh;padding:40px 0 32px;background:#F8F7F4;}
 </style>
 </head>
 <body>${slideContent}</body>

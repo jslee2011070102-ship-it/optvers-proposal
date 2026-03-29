@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
+import { CLASS_GUIDE } from '@/lib/slide-styles'
 import type { ParsedData, ScoredKeyword } from '@/lib/types'
 
 interface ChatMessage {
@@ -17,6 +18,7 @@ async function callClaude(claudeKey: string, system: string, messages: { role: s
     body: JSON.stringify({
       model: 'claude-sonnet-4-6',
       max_tokens: 8000,
+      temperature: 0,
       system,
       messages,
     }),
@@ -96,10 +98,7 @@ A등급 키워드: ${gradeA.map(k => k.keyword).join(', ') || '없음'}
 S등급 키워드: ${gradeS.map(k => `${k.keyword}(검색${k.searchVolume.toLocaleString()}회,상품${k.productCount}개)`).join(', ') || '없음'}
 A등급 키워드: ${gradeA.map(k => `${k.keyword}(검색${k.searchVolume.toLocaleString()}회,상품${k.productCount}개)`).join(', ') || '없음'}
 
-CSS: 파랑=#3B82F6, 초록=#16A34A, 노랑=#D97706, 테두리=#E8E6E0
-Callout: background:#EEF4FF;border-left:3px solid #3B82F6;border-radius:8px;padding:14px 18px;font-size:13px
-테이블: border:1px solid #E8E6E0;border-radius:12px;overflow:hidden / th:background:#F2F1EE;padding:10px 14px
-KPI카드: display:grid;grid-template-columns:repeat(3,1fr);gap:12px / 카드: background:#fff;border:1px solid #E8E6E0;border-radius:12px;padding:20px 22px
+${CLASS_GUIDE}
 
 규칙: body 내부 HTML 조각만 출력. <html><head><body> 태그 없음. height 고정 px 금지. overflow:hidden 금지.
 데이터에 없는 수치를 만들지 마세요. 없는 항목은 [데이터 없음] 표기.`

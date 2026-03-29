@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
+import { CLASS_GUIDE } from '@/lib/slide-styles'
 import type { ParsedData, ScoredKeyword, KeywordRow } from '@/lib/types'
 
 // 슬라이드 파싱 공통 함수
@@ -37,6 +38,7 @@ async function callClaude(claudeKey: string, systemPrompt: string, userPrompt: s
     body: JSON.stringify({
       model: 'claude-sonnet-4-6',
       max_tokens: 16000,
+      temperature: 0,
       system: systemPrompt,
       messages: [{ role: 'user', content: userPrompt }],
     }),
@@ -129,15 +131,7 @@ export async function POST(req: NextRequest) {
 - <html><head><body> 태그 없이 body 내부 HTML 조각만 출력하세요.
 - height 고정 px 금지. overflow:hidden 금지.
 
-═══ CSS 컴포넌트 ═══
-색상: 파랑=#3B82F6, 초록=#16A34A, 노랑=#D97706, 빨강=#DC2626, 배경=#F8F7F4, 테두리=#E8E6E0
-KPI카드: display:grid;grid-template-columns:repeat(3,1fr);gap:12px / 카드: background:#fff;border:1px solid #E8E6E0;border-radius:12px;padding:20px 22px
-Callout: background:#EEF4FF;border-left:3px solid #3B82F6;border-radius:8px;padding:14px 18px;font-size:13px (초록=#ECFDF5/#16A34A, 노랑=#FFFBEB/#D97706)
-테이블: border:1px solid #E8E6E0;border-radius:12px;overflow:hidden / th:background:#F2F1EE;padding:10px 14px;font-size:11px;font-weight:700 / td:padding:11px 14px;font-size:13px
-배지: display:inline-flex;padding:2px 8px;border-radius:20px;font-size:11px;font-weight:700
-포화도바: height:8px;background:#E8E6E0;border-radius:4px / 채움: background:#3B82F6;height:100%;width:XX%
-섹션레이블: font-size:12px;font-weight:600;color:#3B82F6;text-transform:uppercase;margin-bottom:12px
-메인제목: font-size:clamp(24px,3vw,36px);font-weight:800;letter-spacing:-.03em
+${CLASS_GUIDE}
 
 반드시 각 슬라이드를 SLIDE_START 와 SLIDE_END 로 감쌉니다.`
 
