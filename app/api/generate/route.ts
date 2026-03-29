@@ -1,6 +1,59 @@
 import { NextRequest, NextResponse } from 'next/server'
 import type { ParsedData, ScoredKeyword, KeywordRow } from '@/lib/types'
 
+// 슬라이드 파싱 공통 함수
+function parseSlides(raw: string): string[] {
+  const SS = 'SLIDE_START'
+  const SE = 'SLIDE_END'
+  const slides: string[] = []
+  const parts = raw.split(SS)
+  for (let i = 1; i < parts.length; i++) {
+    const end = parts[i].indexOf(SE)
+    if (end !== -1) {
+      let slide = parts[i].substring(0, end).trim()
+      slide = slide.replace(/^```html\s*/i, '').replace(/^```\s*/i, '').replace(/\s*```$/i, '').trim()
+      if (/<html[\s>]/i.test(slide)) {
+        const bodyMatch = slide.match(/<body[^>]*>([\s\S]*?)<\/body>/i)
+        if (bodyMatch) slide = bodyMatch[1].trim()
+      }
+      slide = slide.replace(/height\s*:\s*\d+px/gi, 'min-height: auto')
+      slide = slide.replace(/overflow\s*:\s*hidden/gi, 'overflow: visible')
+      slide = slide.replace(/width\s*:\s*1280px/gi, 'width: 100%')
+      slides.push(slide)
+    }
+  }
+  return slides
+}
+
+// Claude API 호출 공통 함수
+async function callClaude(claudeKey: string, systemPrompt: string, userPrompt: string): Promise<string> {
+  const res = await fetch('https://api.anthropic.com/v1/messages', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'x-api-key': claudeKey,
+      'anthropic-version': '2023-06-01',
+    },
+    body: JSON.stringify({
+      model: 'claude-sonnet-4-6',
+      max_tokens: 16000,
+      system: systemPrompt,
+      messages: [{ role: 'user', content: userPrompt }],
+    }),
+  })
+  if (!res.ok) {
+    let errMsg = 'Claude API error: ' + res.status
+    try {
+      const errBody = await res.text()
+      const errJson = JSON.parse(errBody)
+      errMsg = 'Claude API error: ' + (errJson.error?.message ?? errBody.slice(0, 200))
+    } catch {}
+    throw new Error(errMsg)
+  }
+  const data = await res.json()
+  return data.content[0]?.text || ''
+}
+
 export async function POST(req: NextRequest) {
   try {
     const { parsedData, keywords, scored } = await req.json() as {
@@ -13,13 +66,13 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'ANTHROPIC_API_KEY not set' }, { status: 500 })
     }
 
-    const { stats, keywordProducts, categoryProducts, categoryFilename } = parsedData
+    const { stats, keywordProducts, categoryFilename } = parsedData
     const categoryName = (() => {
       const match = categoryFilename.match(/(?:keyword|category)_([^_]+)_/)
       return match ? match[1] : categoryFilename.replace('.xlsx', '')
     })()
 
-    // 판정 로직 (지침 v1.0 기준)
+    // 판정 로직
     const step1Score = [
       stats.keywordSearch >= 5000,
       (stats.keywordSearchLastYear / 12) / Math.max(stats.keywordSearch, 1) < 2,
@@ -28,19 +81,15 @@ export async function POST(req: NextRequest) {
     ].filter(Boolean).length
 
     const step2Pass = stats.top3SaturationSales < 50 && stats.top1SaturationSales < 35
-
     const opportunityKeywords = scored.filter(s => s.grade === 'S' || s.grade === 'A')
 
     let finalVerdict = ''
     let verdictDetail = ''
     if (step1Score >= 3 && step2Pass && opportunityKeywords.length >= 1) {
-      if (stats.rocketRatio > 80) {
-        finalVerdict = '조건부 추천'
-        verdictDetail = '로켓배송 등록을 전제로 진입을 추천합니다'
-      } else {
-        finalVerdict = '적극 추천'
-        verdictDetail = '시장 규모·경쟁 구조·공백 키워드 3가지 조건을 모두 충족합니다'
-      }
+      finalVerdict = stats.rocketRatio > 80 ? '조건부 추천' : '적극 추천'
+      verdictDetail = stats.rocketRatio > 80
+        ? '로켓배송 등록을 전제로 진입을 추천합니다'
+        : '시장 규모·경쟁 구조·공백 키워드 3가지 조건을 모두 충족합니다'
     } else if (step1Score >= 3 && opportunityKeywords.length >= 1) {
       finalVerdict = '틈새 진입 가능'
       verdictDetail = '경쟁이 있으나 특정 키워드 공백을 공략하면 진입 여지가 있습니다'
@@ -49,20 +98,16 @@ export async function POST(req: NextRequest) {
       verdictDetail = '시장 규모 또는 포화도 조건이 현재 기준치에 미달하나, 아래 제품 방향으로 차별화하면 틈새 진입이 가능합니다'
     }
 
-    // 상위 제품 목록 (최대 20개)
     const top20 = keywordProducts.slice(0, 20)
     const top5Avg = top20.slice(0, 5)
     const avgConversion = stats.top5AvgConversion
     const avgPrice = top5Avg.length > 0
-      ? Math.round(top5Avg.reduce((s, p) => s + p.price, 0) / top5Avg.length)
-      : 0
+      ? Math.round(top5Avg.reduce((s, p) => s + p.price, 0) / top5Avg.length) : 0
 
-    // 기회 키워드 상세 (상위 10개)
     const topKeywords = scored.slice(0, 10)
     const gradeS = scored.filter(s => s.grade === 'S')
     const gradeA = scored.filter(s => s.grade === 'A')
 
-    // 인기키워드 + 상품명 교차분석 데이터 (지침 Step 3)
     const popularKwData = (stats.popularKeywords || []).slice(0, 10).map(pk => {
       const match = keywords.find(k => k.keyword === pk.kw)
       return {
@@ -73,207 +118,97 @@ export async function POST(req: NextRequest) {
       }
     })
 
-    // 자동완성 키워드 분류 (지침 Step 3)
     const autoKeywords = stats.autocompleteKeywords || []
 
-    const SS = 'SLIDE_START'
-    const SE = 'SLIDE_END'
-
+    // ── 공통 시스템 프롬프트 ──
     const systemPrompt = `당신은 쿠팡 신제품 출시 제안서를 작성하는 전문 시장 분석가입니다.
-고객사(브랜드·제조사)가 쿠팡에 신제품을 출시할지 결정하기 위해 이 제안서를 봅니다.
-따라서 반드시 고객사가 납득할 수 있는 수준의 구체적이고 풍부한 내용을 작성해야 합니다.
 
-═══ 제0원칙: 절대적 사실성 ═══
-- 데이터에 없는 수치를 창작하거나 추정으로 채우지 않습니다
-- 모든 수치 뒤에 반드시 [쿠팡 대시보드] 또는 [키워드 분석 파일] 출처를 명시합니다
-- 데이터에 없는 항목은 반드시 "[데이터 없음 — 고객사 확인 필요]" 로 표기합니다
+═══ 절대 원칙 ═══
+- 데이터에 없는 수치를 창작하지 않습니다. 모든 수치에 [쿠팡 대시보드] 또는 [키워드 분석 파일] 출처 표기.
+- "재검토"라는 단어를 절대 사용하지 마세요.
+- <html><head><body> 태그 없이 body 내부 HTML 조각만 출력하세요.
+- height 고정 px 금지. overflow:hidden 금지.
 
-═══ HTML 작성 규칙 ═══
-- <html>, <head>, <body> 태그 없이 body 내부 HTML 조각만 출력하세요
-- height를 고정 px로 지정하지 마세요. overflow:hidden을 절대 사용하지 마세요
-- 내용이 자연스럽게 아래로 늘어나도록 min-height와 padding으로만 여백을 지정합니다
-
-═══ 사용 가능한 CSS 컴포넌트 ═══
-색상: 파랑=#3B82F6, 초록=#16A34A, 노랑=#D97706, 빨강=#DC2626, 배경=#F8F7F4, 카드배경=#fff, 테두리=#E8E6E0
-
-KPI카드: display:grid;grid-template-columns:repeat(3,1fr);gap:12px — 각 카드: background:#fff;border:1px solid #E8E6E0;border-radius:12px;padding:20px 22px
-Callout(파랑): background:#EEF4FF;border-left:3px solid #3B82F6;border-radius:8px;padding:14px 18px;font-size:13px
-Callout(초록): background:#ECFDF5;border-left:3px solid #16A34A
-Callout(노랑): background:#FFFBEB;border-left:3px solid #D97706
-테이블: border:1px solid #E8E6E0;border-radius:12px;overflow:hidden — th: background:#F2F1EE;padding:10px 14px;font-size:11px;font-weight:700 — td: padding:11px 14px;font-size:13px
-배지(파랑): display:inline-flex;padding:2px 8px;border-radius:20px;font-size:11px;font-weight:700;background:#EEF4FF;color:#3B82F6
-포화도바: height:8px;background:#E8E6E0;border-radius:4px — 내부채움: background:#3B82F6;height:100%;width:XX%
-매출시나리오: grid-template-columns:1fr 1fr 1fr;gap:12px — 보수:회색/낙관:파랑/중간:노랑(background:#FFFBEB)
-섹션레이블: font-size:12px;font-weight:600;color:#3B82F6;text-transform:uppercase
+═══ CSS 컴포넌트 ═══
+색상: 파랑=#3B82F6, 초록=#16A34A, 노랑=#D97706, 빨강=#DC2626, 배경=#F8F7F4, 테두리=#E8E6E0
+KPI카드: display:grid;grid-template-columns:repeat(3,1fr);gap:12px / 카드: background:#fff;border:1px solid #E8E6E0;border-radius:12px;padding:20px 22px
+Callout: background:#EEF4FF;border-left:3px solid #3B82F6;border-radius:8px;padding:14px 18px;font-size:13px (초록=#ECFDF5/#16A34A, 노랑=#FFFBEB/#D97706)
+테이블: border:1px solid #E8E6E0;border-radius:12px;overflow:hidden / th:background:#F2F1EE;padding:10px 14px;font-size:11px;font-weight:700 / td:padding:11px 14px;font-size:13px
+배지: display:inline-flex;padding:2px 8px;border-radius:20px;font-size:11px;font-weight:700
+포화도바: height:8px;background:#E8E6E0;border-radius:4px / 채움: background:#3B82F6;height:100%;width:XX%
+섹션레이블: font-size:12px;font-weight:600;color:#3B82F6;text-transform:uppercase;margin-bottom:12px
 메인제목: font-size:clamp(24px,3vw,36px);font-weight:800;letter-spacing:-.03em
 
-═══ 제안서 작성 원칙 ═══
-- 이 제안서를 받는 사람은 고객사(제조사·브랜드)입니다. 판매·출시 결정을 돕는 제안서입니다.
-- "재검토"라는 단어를 제안서 어디에도 절대 사용하지 마세요. 고객사 입장에서 실망스러운 표현입니다.
-- 조건이 까다롭더라도 "이 조건을 충족하면 진입이 가능합니다" 식으로 건설적으로 표현합니다.
-- 마지막 슬라이드(S8)는 반드시 명확한 다음 액션과 함께 마무리합니다.
-- 제안서의 핵심은 S7(신제품 제안)입니다. 2~3개의 구체적이고 실행 가능한 제품 아이디어를 제시합니다.
+반드시 각 슬라이드를 SLIDE_START 와 SLIDE_END 로 감쌉니다.`
 
-═══ 출력 형식 ═══
-반드시 각 슬라이드를 SLIDE_START 와 SLIDE_END 로 감쌉니다.
-각 슬라이드는 충분히 상세하게 (데이터 테이블, KPI 카드, callout, 분석 해석 포함) 작성합니다.
-슬라이드당 최소 400자 이상의 HTML 내용을 포함합니다.
+    // ── 공통 데이터 블록 ──
+    const commonData = `카테고리: ${categoryName} / 분석일: ${new Date().toISOString().split('T')[0]}
 
-슬라이드 구성:
-S0 커버 — 핵심 KPI 3개 + 최종 판정 결론
-S1 시장 규모 — Step1 통과 여부 + 월 검색량/매출 수치 (계절성 언급 금지 — 데이터 없음)
-S2 경쟁 구조 — Step2 포화도 + 로켓 비율 + 전환율 + 벤치마크 비교표
-S3 상위 제품 분석 — 상위 10~20개 제품 테이블 (순위/상품명/가격/리뷰/전환율/배송)
-S4 소비자 탐색 패턴 — 인기키워드 순위표 + 자동완성 패턴 분류 + 검색 의도 해석
-S5 공백 분석 — 고검색/저공급 키워드 발굴 + 상품명 포함 제품 수 + 진입 기회
-S6 기회 키워드 선별 — S/A등급 키워드 상세 분석 + 기회 점수 근거
-S7 제품 방향 제안 — 키워드/형태/가격포지션/상품명 예시 + [데이터 없음] 항목 명시
-S8 매출 시나리오 — 보수/중간/낙관 3단 + 전제 조건 + [가정값] 명시
-S9 최종 결론 — Step1/2/3 판정 결과표 + 최종 판정 + 다음 액션 제안`
+[Step1 시장규모] 월검색량: ${stats.keywordSearch.toLocaleString()}회 / 작년총검색량: ${stats.keywordSearchLastYear.toLocaleString()}회 / 작년월평균: ${Math.round(stats.keywordSearchLastYear / 12).toLocaleString()}회(참고용, 계절성분석불가) / 월매출: ${(stats.categoryMonthlySales / 100000000).toFixed(1)}억원 / 월판매량: ${stats.categoryMonthlyQty.toLocaleString()}개 / 판정: ${step1Score}/4 ${step1Score >= 3 ? '✅통과' : '⚠️기준미달'}
 
-    const userPrompt = `=== 분석 데이터 (쿠팡 대시보드 기반) ===
+[Step2 경쟁구조] 1위포화도: ${stats.top1SaturationSales.toFixed(1)}% / 1~3위포화도: ${stats.top3SaturationSales.toFixed(1)}% / 리뷰포화도: ${stats.top3SaturationReview.toFixed(1)}% / 로켓비율: ${stats.rocketRatio.toFixed(1)}% / 전환율: ${avgConversion.toFixed(1)}% / 판정: ${step2Pass ? '✅통과' : '⚠️미통과'}
 
-카테고리: ${categoryName}
-분석 범위: 쿠팡 키워드 분석 (상위 ${keywordProducts.length}개 제품)
-분석일: ${new Date().toISOString().split('T')[0]}
+[최종판정] ${finalVerdict} — ${verdictDetail}`
 
-─── [Step 1] 시장 규모 ───
-월 검색량:        ${stats.keywordSearch.toLocaleString()}회 [키워드 분석 파일 · 월 검색량]
-작년 총 검색량:   ${stats.keywordSearchLastYear.toLocaleString()}회 [키워드 분석 파일 · 작년 총 검색량]
-작년 월평균:      ${Math.round(stats.keywordSearchLastYear / 12).toLocaleString()}회/월 (참고용 연간 평균 — 계절성 판단 불가, 동월 전년 비교 데이터 미제공)
-계절성 분석:      [데이터 없음 — 월별 세분화 데이터 미제공. S1 슬라이드에서 계절성 언급 금지]
-카테고리 월 매출: ${(stats.categoryMonthlySales / 100000000).toFixed(1)}억원 [쿠팡 대시보드 · 월간 총 매출]
-카테고리 월 판매량: ${stats.categoryMonthlyQty.toLocaleString()}개 [쿠팡 대시보드 · 월간 총 판매량]
-Step1 판정: ${step1Score}개/4개 기준 통과 → ${step1Score >= 3 ? '✅ 통과' : '⚠️ 기준 미달'}
+    // ── 전반부 프롬프트: S0~S4 ──
+    const promptA = `${commonData}
 
-─── [Step 2] 경쟁 구조 ───
-1위 매출 포화도:    ${stats.top1SaturationSales.toFixed(1)}% [키워드 분석 파일] → 기준(20% 미만 ◎ / 20~35% △ / 35% 초과 ✕): ${stats.top1SaturationSales < 20 ? '◎ 매우낮음' : stats.top1SaturationSales < 35 ? '△ 보통' : '✕ 높음'}
-1~3위 매출 포화도:  ${stats.top3SaturationSales.toFixed(1)}% [키워드 분석 파일] → 기준(50% 미만 ◎ / 50~70% △ / 70% 초과 ✕): ${stats.top3SaturationSales < 50 ? '◎ 진입 가능' : stats.top3SaturationSales < 70 ? '△ 주의' : '✕ 과포화'}
-1~3위 리뷰 포화도:  ${stats.top3SaturationReview.toFixed(1)}% [키워드 분석 파일] → 기준(40% 미만 ◎ / 40~60% △ / 60% 초과 ✕): ${stats.top3SaturationReview < 40 ? '◎ 낮음' : stats.top3SaturationReview < 60 ? '△ 보통' : '✕ 높음'}
-로켓 계열 배송 비율: ${stats.rocketRatio.toFixed(1)}% [쿠팡 대시보드] → ${stats.rocketRatio > 80 ? '⚠️ 80% 초과 — 로켓배송 등록 필수' : '✅ 80% 미만 — 일반 진입 가능'}
-상위 5개 평균 전환율: ${avgConversion.toFixed(1)}% [키워드 분석 파일] → 기준(10% 이상 ◎ / 5~9% △ / 5% 미만 ✕): ${avgConversion >= 10 ? '◎ 높음' : avgConversion >= 5 ? '△ 보통' : '✕ 낮음'}
-Step2 판정: ${step2Pass ? '✅ 통과 (포화도 기준 충족)' : '⚠️ 미통과 (포화도 기준 초과)'}
+[상위제품 목록]
+${top20.map(p => `${p.rank}위|${p.name}|${p.price.toLocaleString()}원|리뷰${p.reviews.toLocaleString()}|전환율${p.conversion != null ? p.conversion.toFixed(1) + '%' : 'N/A'}|월매출${p.monthlySales != null ? (p.monthlySales / 10000).toFixed(0) + '만' : 'N/A'}|${p.delivery}`).join('\n')}
 
-─── [Step 3] 공백 분석 ───
-인기키워드 + 상품명 교차분석:
-${popularKwData.map(k => `  ${k.keyword}: 쿠팡검색량 ${k.vol.toLocaleString()}회${k.naverSearch ? ` / 네이버검색량 ${k.naverSearch.toLocaleString()}회` : ''} → 상품명 포함 제품 ${k.productCount}개`).join('\n')}
+[인기키워드+교차분석]
+${popularKwData.map(k => `${k.keyword}: 검색${k.vol.toLocaleString()}회, 상품명포함${k.productCount}개`).join(' / ')}
+자동완성: ${autoKeywords.slice(0, 15).join(', ')}
 
-자동완성 키워드: ${autoKeywords.slice(0, 15).join(', ')}
+=== S0~S4 슬라이드 4장을 작성하세요 ===
+S0: 커버 — 카테고리명, 핵심KPI 3개(월검색량/월매출/월판매량), 최종판정(${finalVerdict}) 배너
+S1: 시장규모 — Step1 판정표 + 수치카드 + 인사이트 callout (계절성 언급 절대 금지 — 데이터없음)
+S2: 경쟁구조 — 포화도/로켓비율/전환율 수치카드 + 포화도바 시각화 + 경쟁강도 해석
+S3: 상위제품분석 — 상위10~20개 제품 전체 테이블 (순위/상품명/가격/리뷰/전환율/월매출/배송)
+S4: 소비자탐색패턴 — 인기키워드 순위표 + 자동완성 패턴분류 + 검색의도 해석
 
-기회 키워드 (S등급: ${gradeS.length}개, A등급: ${gradeA.length}개):
-${topKeywords.map(k => `  [${k.grade}등급] ${k.keyword} — 검색량 ${k.searchVolume.toLocaleString()}회 / 상품명포함 ${k.productCount}개 / 기회점수 ${k.opportunityScore} / ${k.reason}`).join('\n')}
-Step3 판정: ${opportunityKeywords.length >= 1 ? '✅ 빈자리 발견 — 진입 방향 특정 가능' : '⚠️ 빈자리 부족'}
+각 슬라이드마다 하단에 callout 박스로 핵심 인사이트 1~2줄.
+SLIDE_START / SLIDE_END 로 각 슬라이드를 감싸세요.`
 
-─── 상위 제품 목록 ───
-${top20.map(p => `  ${p.rank}위 | ${p.name} | ${p.price.toLocaleString()}원 | 리뷰 ${p.reviews.toLocaleString()}개 | 전환율 ${p.conversion != null ? p.conversion.toFixed(1) + '%' : '[데이터없음]'} | 월매출 ${p.monthlySales != null ? (p.monthlySales / 10000).toFixed(0) + '만원' : '[데이터없음]'} | ${p.delivery}`).join('\n')}
+    // ── 후반부 프롬프트: S5~S9 ──
+    const gapLines = topKeywords.map(k =>
+      `[${k.grade}] ${k.keyword}: 검색${k.searchVolume.toLocaleString()}회, 상품명포함${k.productCount}개, 기회점수${k.opportunityScore}, ${k.reason}`
+    ).join('\n')
 
-─── 최종 판정 ───
-판정: ${finalVerdict}
-근거: ${verdictDetail}
-(Step1 ${step1Score}/4 충족 + Step2 ${step2Pass ? '포화도 기준 충족' : '포화도 주의'} + 공백키워드 ${opportunityKeywords.length}개 발견)
+    const s7guidance = `
+공백키워드→제품제안:
+${gradeS.slice(0, 5).map(k => `★S등급 ${k.keyword}: 검색${k.searchVolume.toLocaleString()}회, 상품${k.productCount}개 → 이 키워드를 상품명에 포함한 제품을 제안`).join('\n')}
+${gradeA.slice(0, 5).map(k => `○A등급 ${k.keyword}: 검색${k.searchVolume.toLocaleString()}회, 상품${k.productCount}개`).join('\n')}
+상위5평균가: ${avgPrice.toLocaleString()}원`
 
-─── [S7 전용] 공백 키워드 → 제품 제안 근거 ───
-아래 데이터를 S7 슬라이드의 제품 제안 근거로 반드시 활용하세요.
-"검색량은 많은데 상품명에 포함된 제품이 적다" = 수요는 있으나 공급이 부족한 공백 시장입니다.
+    const promptB = `${commonData}
 
-S등급 공백 키워드 (즉시 진입 추천):
-${gradeS.slice(0,5).map(k => `  ★ ${k.keyword}: 검색량 ${k.searchVolume.toLocaleString()}회 / 상품명 포함 제품 ${k.productCount}개 / 기회점수 ${k.opportunityScore}점
-S7에서 이 키워드를 상품명에 넣은 제품을 제안하세요.`).join('\n')}
+[기회키워드 상세]
+${gapLines}
+${s7guidance}
 
-A등급 공백 키워드 (진입 추천):
-${gradeA.slice(0,5).map(k => `  ○ ${k.keyword}: 검색량 ${k.searchVolume.toLocaleString()}회 / 상품명 포함 제품 ${k.productCount}개 / 기회점수 ${k.opportunityScore}점`).join('\n')}
+=== S5~S9 슬라이드 5장을 작성하세요 ===
+S5: 공백분석 — 인기키워드×상품명포함수 테이블 (고검색/저공급 강조) + 진입기회 해석
+S6: 기회키워드선별 — S/A등급 키워드 상세표 (검색량/상품수/기회점수/이유) + 등급 배지
+S7: 제품방향제안 — 2~3개 구체적 제품 각각: {제품방향한줄 / 타겟키워드(공백N개) / 가격포지션 / 상품명예시1~2개}
+S8: 매출시나리오 — 보수(시장점유0.5%)/중간(1%)/낙관(2%) 3단 카드 + 전제조건 + [가정값]표기
+S9: 최종결론 — ${finalVerdict} 배너 + Step1/2/3 체크리스트 + 진입전제조건 + 다음액션 3단계
 
-제품 제안 방법:
-- S/A 등급 키워드 중 검색량이 높고 제품 수가 가장 적은 것 2~3개를 골라 제품을 제안합니다
-- 제품명 예시: [키워드]를 직접 포함한 상품명 (예: "강아지 심장 영양제 100정")
-- 경쟁 진입 가격: 상위 제품 평균가 대비 10~20% 저렴하거나, 동일가에 차별화 성분 추가
+S7은 "이 제품을 만들면 되겠다"는 확신을 주는 수준으로 구체적으로 작성하세요.
+S9는 반드시 다음 액션 체크리스트로 마무리하세요.
+SLIDE_START / SLIDE_END 로 각 슬라이드를 감싸세요.`
 
-=== 작성 요청 ===
+    // ── 두 호출 병렬 실행 ──
+    const [rawA, rawB] = await Promise.all([
+      callClaude(claudeKey, systemPrompt, promptA),
+      callClaude(claudeKey, systemPrompt, promptB),
+    ])
 
-위 데이터를 기반으로 9개 슬라이드(S0~S8) HTML을 작성하세요.
+    const slidesA = parseSlides(rawA)
+    const slidesB = parseSlides(rawB)
+    const slides = [...slidesA, ...slidesB]
 
-필수 요구사항:
-1. 모든 수치에 [쿠팡 대시보드] 또는 [키워드 분석 파일] 출처 표기
-2. 각 슬라이드는 데이터 테이블 또는 KPI 카드를 반드시 포함
-3. 각 슬라이드 하단에 파란/초록/노랑 callout 박스로 핵심 인사이트 1~2줄 작성
-4. 데이터에 없는 항목은 [데이터 없음 — 고객사 확인 필요] 표기
-5. 고객사가 "이 제품을 만들면 되겠다"고 납득할 수 있는 수준의 구체성
-6. 전문 컨설팅 제안서 수준의 어조와 밀도
-7. S5(공백분석) 슬라이드에서는 인기키워드별 상품명 포함 수를 테이블로 제시
-
-★ 제안서이므로 "재검토" 딱지는 절대 붙이지 마세요 ★
-대신 조건이 까다로운 경우 "○○ 전제 조건을 충족할 경우 진입 가능합니다"로 표현합니다.
-
-★ S7(신제품 제안) 슬라이드는 아래 형식으로 반드시 2~3개의 구체적인 제품을 제안하세요 ★
-각 제품마다:
-- 제품 방향 한 줄 (예: "심장 전용 강아지 영양제")
-- 타겟 키워드: 공백 키워드 이름 — 상품명 포함 N개만 존재
-- 가격 포지션: XX,000~XX,000원 구간 (경쟁 제품 N개 이하인 공백 구간)
-- 포지셔닝 메시지: "경쟁사에 없는 [특징]을 전면에 내세운 [카테고리]"
-- 상품명 예시: 실제 키워드를 조합한 상품명 1~2개
-
-★ S8(최종 결론) 슬라이드는 다음 순서로 작성하세요 ★
-1. 판정 결과 배너 (${finalVerdict}) — 긍정적·전문적 어조로
-2. Step1/2/3 체크리스트 (통과 여부 요약)
-3. 진입 전제 조건 목록 (있는 경우)
-4. 다음 액션 3단계 체크리스트 (예: 로켓배송 신청 → 초기 리뷰 확보 → 키워드 광고)
-
-SLIDE_START / SLIDE_END 로 반드시 각 슬라이드를 감싸세요.`
-
-    const res = await fetch('https://api.anthropic.com/v1/messages', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'x-api-key': claudeKey,
-        'anthropic-version': '2023-06-01',
-      },
-      body: JSON.stringify({
-        model: 'claude-sonnet-4-6',
-        max_tokens: 16000,
-        system: systemPrompt,
-        messages: [{ role: 'user', content: userPrompt }],
-      }),
-    })
-
-    if (!res.ok) {
-      let errMsg = 'Claude API error: ' + res.status
-      try {
-        const errBody = await res.text()
-        const errJson = JSON.parse(errBody)
-        errMsg = 'Claude API error: ' + (errJson.error?.message ?? errBody.slice(0, 200))
-      } catch {}
-      return NextResponse.json({ error: errMsg }, { status: 400 })
-    }
-
-    const data = await res.json()
-    const raw = data.content[0]?.text || ''
-    const slides: string[] = []
-    const parts = raw.split(SS)
-
-    for (let i = 1; i < parts.length; i++) {
-      const end = parts[i].indexOf(SE)
-      if (end !== -1) {
-        let slide = parts[i].substring(0, end).trim()
-
-        // 마크다운 코드블록 태그 제거
-        slide = slide.replace(/^```html\s*/i, '').replace(/^```\s*/i, '').replace(/\s*```$/i, '').trim()
-
-        // 완전한 HTML 문서인 경우 → body 내용만 추출
-        if (/<html[\s>]/i.test(slide)) {
-          const bodyMatch = slide.match(/<body[^>]*>([\s\S]*?)<\/body>/i)
-          if (bodyMatch) slide = bodyMatch[1].trim()
-        }
-
-        // 고정 높이/overflow 제거
-        slide = slide.replace(/height\s*:\s*\d+px/gi, 'min-height: auto')
-        slide = slide.replace(/overflow\s*:\s*hidden/gi, 'overflow: visible')
-        slide = slide.replace(/width\s*:\s*1280px/gi, 'width: 100%')
-
-        slides.push(slide)
-      }
-    }
-
-    return NextResponse.json({ slides, raw })
+    return NextResponse.json({ slides, raw: rawA + '\n\n' + rawB })
   } catch (e) {
     return NextResponse.json({ error: String(e) }, { status: 500 })
   }

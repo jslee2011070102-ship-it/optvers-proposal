@@ -6,6 +6,29 @@ interface ChatMessage {
   content: string
 }
 
+async function callClaude(claudeKey: string, system: string, messages: { role: string; content: string }[]): Promise<string> {
+  const res = await fetch('https://api.anthropic.com/v1/messages', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'x-api-key': claudeKey,
+      'anthropic-version': '2023-06-01',
+    },
+    body: JSON.stringify({
+      model: 'claude-sonnet-4-6',
+      max_tokens: 8000,
+      system,
+      messages,
+    }),
+  })
+  if (!res.ok) {
+    const err = await res.text().catch(() => res.status.toString())
+    throw new Error('Claude API error: ' + err.slice(0, 200))
+  }
+  const data = await res.json()
+  return data.content[0]?.text || ''
+}
+
 export async function POST(req: NextRequest) {
   try {
     const { messages, slides, parsedData, scored } = await req.json() as {
@@ -20,93 +43,110 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'ANTHROPIC_API_KEY not set' }, { status: 500 })
     }
 
-    const { stats } = parsedData
     const categoryName = (() => {
       const match = parsedData.categoryFilename.match(/(?:keyword|category)_([^_]+)_/)
       return match ? match[1] : parsedData.categoryFilename.replace('.xlsx', '')
     })()
 
+    const { stats } = parsedData
     const gradeS = scored.filter(s => s.grade === 'S')
     const gradeA = scored.filter(s => s.grade === 'A')
+    const userRequest = messages[messages.length - 1]?.content || ''
 
-    const systemPrompt = `당신은 쿠팡 신제품 출시 제안서를 작성하는 전문 시장 분석가입니다.
-현재 제안서 슬라이드가 이미 생성되어 있으며, 사용자의 수정 요청에 응답합니다.
+    // ── 1단계: 분석 응답 (무엇을 어떻게 바꿀지) ──
+    const analysisSystem = `당신은 쿠팡 제안서 편집 어시스턴트입니다.
+카테고리: ${categoryName}
+현재 슬라이드 수: ${slides.length}개 (S0~S${slides.length - 1})
 
-분석 대상 카테고리: ${categoryName}
-카테고리 월 매출: ${(stats.categoryMonthlySales / 100000000).toFixed(1)}억원
-키워드 월 검색량: ${stats.keywordSearch.toLocaleString()}회
-S등급 기회 키워드: ${gradeS.map(k => k.keyword).join(', ') || '없음'}
-A등급 기회 키워드: ${gradeA.map(k => k.keyword).join(', ') || '없음'}
+슬라이드 목록:
+${slides.map((s, i) => `슬라이드${i}(S${i}): ${s.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 120)}...`).join('\n')}
 
-현재 슬라이드 수: ${slides.length}개
+S등급 키워드: ${gradeS.map(k => k.keyword).join(', ') || '없음'}
+A등급 키워드: ${gradeA.map(k => k.keyword).join(', ') || '없음'}
+월검색량: ${stats.keywordSearch.toLocaleString()}회 / 월매출: ${(stats.categoryMonthlySales / 100000000).toFixed(1)}억원
 
-현재 슬라이드 내용 요약:
-${slides.map((s, i) => `슬라이드 ${i+1}: ${s.substring(0, 200).replace(/<[^>]+>/g, ' ').trim()}...`).join('\n')}
+사용자 요청에 대해:
+1. 어떤 변경을 할 것인지 한국어로 설명합니다 (2~3문장)
+2. 어느 슬라이드를 수정/추가할지 명시합니다
+3. 마지막 줄에 반드시 아래 형식으로 액션을 출력합니다:
+   ACTION: update_slide:N  (기존 슬라이드 N 수정, N은 0부터 시작)
+   ACTION: add_slide  (새 슬라이드 추가)
+   ACTION: info_only  (슬라이드 변경 없이 정보 제공만)
 
-사용자가 수정 요청을 하면:
-1. 어떤 슬라이드를 어떻게 바꿀지 명확히 설명합니다
-2. 특정 슬라이드를 수정해야 할 경우, 반드시 아래 형식으로 수정된 HTML을 제공합니다:
-   SLIDE_UPDATE:번호:SLIDE_UPDATE_START
-   (슬라이드 HTML)
-   SLIDE_UPDATE_END
-   번호는 0부터 시작합니다 (슬라이드 1 = 번호 0)
-3. 데이터에 없는 수치를 만들어내지 않습니다
-4. HTML 작성 시: height 고정 금지, overflow:hidden 금지, body/html 태그 없이 body 내부만 출력
+데이터에 없는 수치를 만들지 마세요.`
 
-수정 요청이 아닌 질문이면 설명으로만 답합니다.`
+    const reply = await callClaude(claudeKey, analysisSystem, messages.map(m => ({ role: m.role, content: m.content })))
 
-    const res = await fetch('https://api.anthropic.com/v1/messages', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'x-api-key': claudeKey,
-        'anthropic-version': '2023-06-01',
-      },
-      body: JSON.stringify({
-        model: 'claude-sonnet-4-6',
-        max_tokens: 8000,
-        system: systemPrompt,
-        messages: messages.map(m => ({ role: m.role, content: m.content })),
-      }),
-    })
+    // ── 2단계: 액션 파싱 → HTML 생성 ──
+    const actionMatch = reply.match(/ACTION:\s*(update_slide:(\d+)|add_slide|info_only)/)
+    const replyText = reply.replace(/ACTION:.*/g, '').trim()
 
-    if (!res.ok) {
-      const err = await res.json()
-      return NextResponse.json({ error: 'Claude API error: ' + (err.error?.message ?? res.status) }, { status: 400 })
+    if (!actionMatch || actionMatch[1] === 'info_only') {
+      return NextResponse.json({ reply: replyText, slides: [] })
     }
 
-    const data = await res.json()
-    const raw = data.content[0]?.text || ''
+    const isAdd = actionMatch[1] === 'add_slide'
+    const slideIdx = isAdd ? slides.length : parseInt(actionMatch[2] ?? '0', 10)
+    const currentHtml = !isAdd && slideIdx < slides.length ? slides[slideIdx] : ''
 
-    // 슬라이드 업데이트 파싱
+    // HTML 생성 프롬프트
+    const htmlSystem = `당신은 쿠팡 제안서 슬라이드를 HTML로 작성하는 전문가입니다.
+카테고리: ${categoryName}
+월검색량: ${stats.keywordSearch.toLocaleString()}회 / 월매출: ${(stats.categoryMonthlySales / 100000000).toFixed(1)}억원
+S등급 키워드: ${gradeS.map(k => `${k.keyword}(검색${k.searchVolume.toLocaleString()}회,상품${k.productCount}개)`).join(', ') || '없음'}
+A등급 키워드: ${gradeA.map(k => `${k.keyword}(검색${k.searchVolume.toLocaleString()}회,상품${k.productCount}개)`).join(', ') || '없음'}
+
+CSS: 파랑=#3B82F6, 초록=#16A34A, 노랑=#D97706, 테두리=#E8E6E0
+Callout: background:#EEF4FF;border-left:3px solid #3B82F6;border-radius:8px;padding:14px 18px;font-size:13px
+테이블: border:1px solid #E8E6E0;border-radius:12px;overflow:hidden / th:background:#F2F1EE;padding:10px 14px
+KPI카드: display:grid;grid-template-columns:repeat(3,1fr);gap:12px / 카드: background:#fff;border:1px solid #E8E6E0;border-radius:12px;padding:20px 22px
+
+규칙: body 내부 HTML 조각만 출력. <html><head><body> 태그 없음. height 고정 px 금지. overflow:hidden 금지.
+데이터에 없는 수치를 만들지 마세요. 없는 항목은 [데이터 없음] 표기.`
+
+    const htmlPrompt = isAdd
+      ? `사용자 요청: "${userRequest}"
+기존 슬라이드들의 맥락을 이어서, 위 요청에 맞는 새 슬라이드 HTML을 작성하세요.
+전문 제안서 수준으로 구체적으로 작성하고, 하단에 callout 박스로 핵심 인사이트를 포함하세요.
+HTML 조각만 출력하세요.`
+      : `사용자 요청: "${userRequest}"
+
+현재 슬라이드${slideIdx} HTML:
+${currentHtml.slice(0, 3000)}
+
+위 요청에 맞게 슬라이드를 수정한 새 HTML을 작성하세요.
+전문 제안서 수준으로 구체적으로 작성하고, 하단에 callout 박스로 핵심 인사이트를 포함하세요.
+HTML 조각만 출력하세요.`
+
+    const newHtml = await callClaude(claudeKey, htmlSystem, [{ role: 'user', content: htmlPrompt }])
+
+    // HTML 정리
+    let cleanHtml = newHtml
+      .replace(/^```html\s*/i, '').replace(/^```\s*/i, '').replace(/\s*```$/i, '').trim()
+    if (/<html[\s>]/i.test(cleanHtml)) {
+      const bodyMatch = cleanHtml.match(/<body[^>]*>([\s\S]*?)<\/body>/i)
+      if (bodyMatch) cleanHtml = bodyMatch[1].trim()
+    }
+    cleanHtml = cleanHtml
+      .replace(/height\s*:\s*\d+px/gi, 'min-height: auto')
+      .replace(/overflow\s*:\s*hidden/gi, 'overflow: visible')
+      .replace(/width\s*:\s*1280px/gi, 'width: 100%')
+
+    // 슬라이드 배열 업데이트
     const updatedSlides = [...slides]
-    let hasUpdate = false
-    const updatePattern = /SLIDE_UPDATE:(\d+):SLIDE_UPDATE_START([\s\S]*?)SLIDE_UPDATE_END/g
-    let match
-    while ((match = updatePattern.exec(raw)) !== null) {
-      const idx = parseInt(match[1], 10)
-      let html = match[2].trim()
-      // 정리
-      html = html.replace(/^```html\s*/i, '').replace(/^```\s*/i, '').replace(/\s*```$/i, '').trim()
-      if (/<html[\s>]/i.test(html)) {
-        const bodyMatch = html.match(/<body[^>]*>([\s\S]*?)<\/body>/i)
-        if (bodyMatch) html = bodyMatch[1].trim()
-      }
-      html = html.replace(/height\s*:\s*\d+px/gi, 'min-height: auto')
-      html = html.replace(/overflow\s*:\s*hidden/gi, 'overflow: visible')
-      html = html.replace(/width\s*:\s*1280px/gi, 'width: 100%')
-      if (idx >= 0 && idx < updatedSlides.length) {
-        updatedSlides[idx] = html
-        hasUpdate = true
-      }
+    if (isAdd) {
+      updatedSlides.push(cleanHtml)
+    } else {
+      updatedSlides[slideIdx] = cleanHtml
     }
 
-    // 응답에서 SLIDE_UPDATE 블록 제거 후 사용자에게 표시
-    const reply = raw.replace(/SLIDE_UPDATE:\d+:SLIDE_UPDATE_START[\s\S]*?SLIDE_UPDATE_END/g, '').trim()
+    const slideDesc = isAdd
+      ? `✅ 새 슬라이드(S${updatedSlides.length - 1})가 추가되었습니다.`
+      : `✅ S${slideIdx} 슬라이드가 업데이트되었습니다.`
 
     return NextResponse.json({
-      reply,
-      slides: hasUpdate ? updatedSlides : [],
+      reply: replyText + '\n\n' + slideDesc,
+      slides: updatedSlides,
     })
   } catch (e) {
     return NextResponse.json({ error: String(e) }, { status: 500 })
