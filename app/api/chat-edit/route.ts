@@ -71,9 +71,9 @@ A등급 키워드: ${gradeA.map(k => k.keyword).join(', ') || '없음'}
 1. 어떤 변경을 할 것인지 한국어로 설명합니다 (2~3문장)
 2. 어느 슬라이드를 수정/추가할지 명시합니다
 3. 마지막 줄에 반드시 아래 형식으로 액션을 출력합니다:
-   ACTION: update_slide:N  (기존 슬라이드 N 수정, N은 0부터 시작)
-   ACTION: add_slide  (새 슬라이드 추가)
-   ACTION: info_only  (슬라이드 변경 없이 정보 제공만)
+ ACTION: update_slide:N (기존 슬라이드 N 수정, N은 0부터 시작)
+ ACTION: add_slide (새 슬라이드 추가)
+ ACTION: info_only (슬라이드 변경 없이 정보 제공만)
 
 데이터에 없는 수치를 만들지 마세요.`
 
@@ -92,7 +92,7 @@ A등급 키워드: ${gradeA.map(k => k.keyword).join(', ') || '없음'}
     const currentHtml = !isAdd && slideIdx < slides.length ? slides[slideIdx] : ''
 
     // HTML 생성 프롬프트
-    const htmlSystem = `당신은 쿠팡 제안서 슬라이드를 HTML로 작성하는 전문가입니다.
+    const htmlSystem = `당신은 쿠팡 제안서 슬라이드를 HTML로 수정하는 전문가입니다.
 카테고리: ${categoryName}
 월검색량: ${stats.keywordSearch.toLocaleString()}회 / 월매출: ${(stats.categoryMonthlySales / 100000000).toFixed(1)}억원
 S등급 키워드: ${gradeS.map(k => `${k.keyword}(검색${k.searchVolume.toLocaleString()}회,상품${k.productCount}개)`).join(', ') || '없음'}
@@ -100,8 +100,11 @@ A등급 키워드: ${gradeA.map(k => `${k.keyword}(검색${k.searchVolume.toLoca
 
 ${CLASS_GUIDE}
 
-규칙: body 내부 HTML 조각만 출력. <html><head><body> 태그 없음. height 고정 px 금지. overflow:hidden 금지.
-데이터에 없는 수치를 만들지 마세요. 없는 항목은 [데이터 없음] 표기.`
+규칙:
+- body 내부 HTML 조각만 출력. <html><head><body> 태그 없음.
+- height 고정 px 금지. overflow:hidden 금지.
+- 데이터에 없는 수치를 만들지 마세요. 없는 항목은 [데이터 없음] 표기.
+- 기존 슬라이드를 수정할 때: CSS 클래스 구조와 레이아웃(div 계층, 그리드, 카드 구조)을 반드시 유지하세요. 텍스트 내용과 수치만 바꾸세요. 구조를 새로 만들지 마세요.`
 
     const htmlPrompt = isAdd
       ? `사용자 요청: "${userRequest}"
@@ -110,12 +113,16 @@ ${CLASS_GUIDE}
 HTML 조각만 출력하세요.`
       : `사용자 요청: "${userRequest}"
 
-현재 슬라이드${slideIdx} HTML:
-${currentHtml.slice(0, 3000)}
+아래는 현재 슬라이드${slideIdx}의 HTML입니다. 이것을 템플릿으로 사용하세요:
+===현재HTML시작===
+${currentHtml.slice(0, 4000)}
+===현재HTML끝===
 
-위 요청에 맞게 슬라이드를 수정한 새 HTML을 작성하세요.
-전문 제안서 수준으로 구체적으로 작성하고, 하단에 callout 박스로 핵심 인사이트를 포함하세요.
-HTML 조각만 출력하세요.`
+수정 지침:
+1. 위 HTML의 전체 구조(div 계층, CSS 클래스, 레이아웃)를 그대로 유지하세요
+2. 사용자 요청에 맞게 텍스트 내용, 수치, 키워드만 변경하세요
+3. 새 컴포넌트를 추가하거나 기존 구조를 재배치하지 마세요
+4. 수정된 완전한 HTML 조각을 출력하세요 (HTML 조각만, 설명 없이)`
 
     const newHtml = await callClaude(claudeKey, htmlSystem, [{ role: 'user', content: htmlPrompt }])
 
